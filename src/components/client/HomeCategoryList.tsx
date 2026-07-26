@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getCategoryStyle } from '@/store/categoryStore';
+import useCategoryStore, { getCategoryStyle } from '@/store/categoryStore';
 import { styles } from '@/styles/homeView.styles';
 
 export const CategorySkeleton = ({ grid, opacity }: { grid?: boolean; opacity: Animated.Value }) => {
@@ -24,6 +24,8 @@ interface HomeCategoryListProps {
   categories: any[];
   activeCategory: string;
   setActiveCategory: (category: string) => void;
+  activeSubcategory?: string;
+  setActiveSubcategory?: (subCategory: string) => void;
 }
 
 const getLightBg = (hex: string) => {
@@ -46,7 +48,44 @@ export default function HomeCategoryList({
   categories,
   activeCategory,
   setActiveCategory,
+  activeSubcategory = '',
+  setActiveSubcategory,
 }: HomeCategoryListProps) {
+  const getSubcategoriesByCategory = useCategoryStore((state) => state.getSubcategoriesByCategory);
+  const subAnim = useRef(new Animated.Value(0)).current;
+
+  // Resolve the active main category object
+  const activeCategoryObj = categories.find(
+    (c) => c.name.toLowerCase() === activeCategory.toLowerCase()
+  );
+
+  // Retrieve subcategories dynamically for the active category
+  const currentSubcategories = activeCategory
+    ? getSubcategoriesByCategory(activeCategoryObj?.id || activeCategoryObj?.name || activeCategory)
+    : [];
+
+  // Animate subcategories row when active category or subcategories list changes
+  useEffect(() => {
+    if (activeCategory && currentSubcategories.length > 0) {
+      subAnim.setValue(0);
+      Animated.timing(subAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [activeCategory, currentSubcategories.length]);
+
+  const handleMainCategoryPress = (catName: string) => {
+    if (activeCategory !== catName) {
+      setActiveCategory(catName);
+      // Reset subcategory selection when switching main categories
+      if (setActiveSubcategory) {
+        setActiveSubcategory('');
+      }
+    }
+  };
+
   return (
     <>
       <View style={styles.sheetHeaderWithAction}>
@@ -69,7 +108,7 @@ export default function HomeCategoryList({
                     <Pressable
                       key={cat.id}
                       style={[styles.categoryGridCard, isSelected && styles.categoryGridCardSelected]}
-                      onPress={() => setActiveCategory(cat.name)}
+                      onPress={() => handleMainCategoryPress(cat.name)}
                     >
                       <View style={[styles.categoryIconCircle, { backgroundColor: getLightBg(style.color) }]}>
                         <Ionicons name={style.icon as any} size={22} color={isSelected ? '#10B981' : style.color} />
@@ -101,7 +140,7 @@ export default function HomeCategoryList({
                       <Pressable
                         key={cat.id}
                         style={[styles.categoryGridCard, isSelected && styles.categoryGridCardSelected]}
-                        onPress={() => setActiveCategory(cat.name)}
+                        onPress={() => handleMainCategoryPress(cat.name)}
                       >
                         <View style={[styles.categoryIconCircle, { backgroundColor: getLightBg(style.color) }]}>
                           <Ionicons name={style.icon as any} size={22} color={isSelected ? '#10B981' : style.color} />
@@ -151,7 +190,7 @@ export default function HomeCategoryList({
                 <Pressable
                   key={cat.id}
                   style={[styles.categoryCard, isSelected && styles.categoryCardSelected]}
-                  onPress={() => setActiveCategory(cat.name)}
+                  onPress={() => handleMainCategoryPress(cat.name)}
                 >
                   <View style={[styles.categoryIconCircle, { backgroundColor: getLightBg(style.color) }]}>
                     <Ionicons name={style.icon as any} size={22} color={isSelected ? '#10B981' : style.color} />
@@ -165,6 +204,76 @@ export default function HomeCategoryList({
           )}
         </ScrollView>
       )}
+
+      {/* ── Subcategories Horizontal Filter Chips / Pill Tags Row ──────── */}
+      {activeCategory && currentSubcategories.length > 0 ? (
+        <Animated.View
+          style={[
+            styles.subCategoryContainer,
+            {
+              opacity: subAnim,
+              transform: [
+                {
+                  translateY: subAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [8, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <Text style={styles.subCategoryLabel}>Select Specialty / Subcategory</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.subCategoryScroll}
+          >
+            {currentSubcategories.map((sub: any) => {
+              const isSubSelected =
+                activeSubcategory.toLowerCase() === sub.name.toLowerCase();
+              const subColor = sub.color || activeCategoryObj?.color || '#10B981';
+
+              return (
+                <Pressable
+                  key={sub.id || sub.name}
+                  style={[
+                    styles.subChip,
+                    isSubSelected && [
+                      styles.subChipActive,
+                      { borderColor: subColor, backgroundColor: getLightBg(subColor) },
+                    ],
+                  ]}
+                  onPress={() => {
+                    if (isSubSelected) {
+                      if (setActiveSubcategory) setActiveSubcategory('');
+                    } else {
+                      if (setActiveSubcategory) setActiveSubcategory(sub.name);
+                    }
+                  }}
+                >
+                  {sub.image ? (
+                    <Ionicons
+                      name={sub.image as any}
+                      size={14}
+                      color={isSubSelected ? subColor : '#6B7280'}
+                      style={{ marginRight: 5 }}
+                    />
+                  ) : null}
+                  <Text
+                    style={[
+                      styles.subChipText,
+                      isSubSelected && [styles.subChipTextActive, { color: subColor }],
+                    ]}
+                  >
+                    {sub.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </Animated.View>
+      ) : null}
     </>
   );
 }

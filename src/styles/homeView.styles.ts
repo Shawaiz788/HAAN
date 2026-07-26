@@ -194,6 +194,48 @@ export const styles = StyleSheet.create({
     color: '#10B981',
     fontWeight: '800',
   },
+  subCategoryContainer: {
+    marginTop: 8,
+    marginBottom: 4,
+    gap: 4,
+  },
+  subCategoryLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  subCategoryScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  subChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 20,
+    paddingHorizontal: 13,
+    paddingVertical: 6,
+  },
+  subChipActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+    borderWidth: 1.5,
+  },
+  subChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  subChipTextActive: {
+    color: '#0B5A3E',
+    fontWeight: '700',
+  },
   inputContainer: {
     marginTop: 10,
     gap: 10,

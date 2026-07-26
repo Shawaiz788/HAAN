@@ -133,6 +133,7 @@ export default function HomeView({ userName }: HomeViewProps) {
 
   // Form Inputs State
   const [activeCategory, setActiveCategory] = useState<string>('');
+  const [activeSubcategory, setActiveSubcategory] = useState<string>('');
   const [budget, setBudget] = useState('');
   const [description, setDescription] = useState('');
 
@@ -444,7 +445,7 @@ export default function HomeView({ userName }: HomeViewProps) {
     }
 
     const selectedCategoryObj = categories.find(c => c.name === activeCategory);
-    if (!selectedCategoryObj) {
+    if (!selectedCategoryObj || !selectedCategoryObj.id) {
       Alert.alert('Selection Required', 'Please select a valid category.');
       return;
     }
@@ -513,6 +514,8 @@ export default function HomeView({ userName }: HomeViewProps) {
         categories={categories}
         activeCategory={activeCategory}
         setActiveCategory={setActiveCategory}
+        activeSubcategory={activeSubcategory}
+        setActiveSubcategory={setActiveSubcategory}
         locStreet={locStreet} setLocStreet={setLocStreet}
         locArea={locArea} setLocArea={setLocArea}
         locCity={locCity} setLocCity={setLocCity}

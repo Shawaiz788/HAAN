@@ -56,7 +56,7 @@ export const categoryService = {
 
   // ── SubCategory Endpoints ──────────────────────────────────────────────────
   getSubcategories: async (): Promise<SubCategory[]> => {
-    const response = await fetchWithAuth(`${API_URL}/app/subcategory/`);
+    const response = await fetchWithAuth(`${API_URL}/app/sub/category/`);
     const text = await response.text();
     if (!response.ok) {
       if (response.status === 404) return [];
@@ -67,7 +67,7 @@ export const categoryService = {
   },
 
   createSubcategory: async (payload: CreateSubCategoryPayload): Promise<SubCategory> => {
-    const response = await fetchWithAuth(`${API_URL}/app/subcategory/`, {
+    const response = await fetchWithAuth(`${API_URL}/app/sub/category/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -80,7 +80,7 @@ export const categoryService = {
   },
 
   updateSubcategory: async (id: number, payload: Partial<CreateSubCategoryPayload>): Promise<SubCategory> => {
-    const response = await fetchWithAuth(`${API_URL}/app/subcategory/${id}/`, {
+    const response = await fetchWithAuth(`${API_URL}/app/sub/category/${id}/`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -93,7 +93,7 @@ export const categoryService = {
   },
 
   deleteSubcategory: async (id: number): Promise<boolean> => {
-    const response = await fetchWithAuth(`${API_URL}/app/subcategory/${id}/`, {
+    const response = await fetchWithAuth(`${API_URL}/app/sub/category/${id}/`, {
       method: 'DELETE',
     });
     if (!response.ok) {

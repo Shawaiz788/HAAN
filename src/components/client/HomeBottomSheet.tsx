@@ -33,6 +33,8 @@ interface HomeBottomSheetProps {
   categories: any[];
   activeCategory: string;
   setActiveCategory: (cat: string) => void;
+  activeSubcategory?: string;
+  setActiveSubcategory?: (subCat: string) => void;
   locStreet: string;
   setLocStreet: (val: string) => void;
   locArea: string;
@@ -71,6 +73,8 @@ export default function HomeBottomSheet({
   categories,
   activeCategory,
   setActiveCategory,
+  activeSubcategory,
+  setActiveSubcategory,
   locStreet,
   setLocStreet,
   locArea,
@@ -164,6 +168,8 @@ export default function HomeBottomSheet({
           categories={categories}
           activeCategory={activeCategory}
           setActiveCategory={setActiveCategory}
+          activeSubcategory={activeSubcategory}
+          setActiveSubcategory={setActiveSubcategory}
         />
 
         <View style={styles.inputContainer}>
