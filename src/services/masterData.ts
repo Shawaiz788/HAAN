@@ -22,7 +22,7 @@ async function createItem<T>(endpoint: string, payload: any): Promise<T> {
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Failed to create ${endpoint}. Status: ${response.status}`);
+    throw new Error(`Failed to create ${endpoint}. Status: ${response.status}. Details: ${text}`);
   }
   return JSON.parse(text);
 }
@@ -32,7 +32,7 @@ async function getItemById<T>(endpoint: string, id: number): Promise<T | null> {
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return null;
-    throw new Error(`Failed to fetch ${endpoint} ${id}. Status: ${response.status}`);
+    throw new Error(`Failed to fetch ${endpoint} ${id}. Status: ${response.status}. Details: ${text}`);
   }
   return JSON.parse(text);
 }
@@ -45,7 +45,7 @@ async function updateItem<T>(endpoint: string, id: number, payload: any): Promis
   });
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Failed to update ${endpoint} ${id}. Status: ${response.status}`);
+    throw new Error(`Failed to update ${endpoint} ${id}. Status: ${response.status}. Details: ${text}`);
   }
   return JSON.parse(text);
 }
@@ -55,7 +55,8 @@ async function deleteItem(endpoint: string, id: number): Promise<boolean> {
     method: 'DELETE',
   });
   if (!response.ok) {
-    throw new Error(`Failed to delete ${endpoint} ${id}. Status: ${response.status}`);
+    const text = await response.text();
+    throw new Error(`Failed to delete ${endpoint} ${id}. Status: ${response.status}. Details: ${text}`);
   }
   return true;
 }

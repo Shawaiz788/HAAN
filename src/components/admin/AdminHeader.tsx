@@ -1,10 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Image, ActivityIndicator, Alert, ToastAndroid, Platform } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
-import { updateProfilePic } from '@/services/user';
-import { useAuth } from '@/context/auth';
 
 interface AdminHeaderProps {
   title: string;
@@ -15,51 +12,7 @@ interface AdminHeaderProps {
 
 export default function AdminHeader({ title, subtitle, onOpenDrawer, user }: AdminHeaderProps) {
   const insets = useSafeAreaInsets();
-  const { updateUser } = useAuth();
-  const [isUploading, setIsUploading] = useState(false);
-
   const profilePic = user?.profile_pic;
-
-  const handlePickImage = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Gallery permissions are required to select a profile picture.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.5,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedUri = result.assets[0].uri;
-        setIsUploading(true);
-
-        const profilePicResponse = await updateProfilePic(selectedUri);
-        const resObj = profilePicResponse as any;
-        const rawUrl = resObj?.image ?? resObj?.profile_pic;
-        if (rawUrl) {
-          const BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
-          const fullUrl = rawUrl.startsWith('http') ? rawUrl : `${BASE}${rawUrl}`;
-          await updateUser({ profile_pic: fullUrl });
-          if (Platform.OS === 'android') {
-            ToastAndroid.show('Profile picture updated!', ToastAndroid.SHORT);
-          } else {
-            Alert.alert('Success', 'Profile picture updated successfully!');
-          }
-        }
-      }
-    } catch (err: any) {
-      console.error('[AdminHeader] Error updating profile picture:', err);
-      Alert.alert('Upload Failed', err?.message || 'Could not update profile picture.');
-    } finally {
-      setIsUploading(false);
-    }
-  };
 
   return (
     <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 16) }]}>
@@ -77,23 +30,14 @@ export default function AdminHeader({ title, subtitle, onOpenDrawer, user }: Adm
           </View>
         </View>
 
-        <Pressable style={styles.userSection} onPress={handlePickImage} disabled={isUploading}>
-          {isUploading ? (
-            <View style={styles.avatarPlaceholder}>
-              <ActivityIndicator size="small" color="#0B5A3E" />
-            </View>
-          ) : profilePic ? (
+        <Pressable style={styles.userSection} onPress={onOpenDrawer}>
+          {profilePic ? (
             <Image source={{ uri: profilePic }} style={styles.userAvatar} />
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Ionicons name="person" size={20} color="#6B7280" />
             </View>
           )}
-
-          {/* Small Camera Badge Icon */}
-          <View style={styles.cameraBadge}>
-            <Ionicons name="camera" size={10} color="#FFFFFF" />
-          </View>
         </Pressable>
       </View>
 
@@ -182,18 +126,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#F59E0B',
-  },
-  cameraBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: '#0B5A3E',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
   },
 });

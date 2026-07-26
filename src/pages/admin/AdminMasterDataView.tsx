@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import AdminDrawerPanel from '@/components/admin/AdminDrawerPanel';
 import SearchBar from '@/components/admin/common/SearchBar';
 import EmptyState from '@/components/admin/common/EmptyState';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
+import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
 import { masterDataService } from '@/services/masterData';
 
 type MasterDomain =
@@ -56,16 +57,33 @@ export default function AdminMasterDataView() {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeDomain, setActiveDomain] = useState<MasterDomain>('countries');
+  const activeDomainRef = useRef<MasterDomain>(activeDomain);
+
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Keep ref in sync with activeDomain
+  useEffect(() => {
+    activeDomainRef.current = activeDomain;
+  }, [activeDomain]);
 
   // Add/Edit modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [citiesList, setCitiesList] = useState<any[]>([]);
+  const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
+
+  // Load cities list for city selector in Area modal
+  useEffect(() => {
+    masterDataService
+      .getCities()
+      .then((data) => setCitiesList(data || []))
+      .catch(() => {});
+  }, []);
 
   // Delete dialog state
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -74,6 +92,7 @@ export default function AdminMasterDataView() {
   const fetchDomainItems = async (domain: MasterDomain) => {
     try {
       setLoading(true);
+      setItems([]);
       let data: any[] = [];
       if (domain === 'countries') data = await masterDataService.getCountries();
       else if (domain === 'cities') data = await masterDataService.getCities();
@@ -84,13 +103,20 @@ export default function AdminMasterDataView() {
       else if (domain === 'statuses') data = await masterDataService.getStatuses();
       else if (domain === 'configs') data = await masterDataService.getConfigs();
 
-      setItems(data);
+      // Ignore out-of-order responses if user switched tabs during fetch
+      if (activeDomainRef.current === domain) {
+        setItems(data);
+      }
     } catch (e) {
       console.warn(`[AdminMasterDataView] Error fetching ${domain}:`, e);
-      setItems([]);
+      if (activeDomainRef.current === domain) {
+        setItems([]);
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (activeDomainRef.current === domain) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -101,12 +127,22 @@ export default function AdminMasterDataView() {
   const handleOpenAddModal = () => {
     setEditItem(null);
     setNameInput('');
+    setSelectedCityId(citiesList[0]?.id || null);
     setModalVisible(true);
   };
 
   const handleOpenEditModal = (item: any) => {
     setEditItem(item);
     setNameInput(item.name || item.key || '');
+    const cId =
+      item.city_id !== undefined && item.city_id !== null
+        ? item.city_id
+        : typeof item.city === 'object' && item.city !== null
+        ? item.city.id
+        : typeof item.city === 'number'
+        ? item.city
+        : citiesList[0]?.id || null;
+    setSelectedCityId(cId);
     setModalVisible(true);
   };
 
@@ -117,7 +153,19 @@ export default function AdminMasterDataView() {
     }
     try {
       setSaving(true);
-      const payload = { name: nameInput.trim(), key: nameInput.trim() };
+      let payload: any = { name: nameInput.trim(), key: nameInput.trim() };
+      if (activeDomain === 'areas') {
+        if (!selectedCityId) {
+          Alert.alert('City Required', 'Please select a city to assign this area to.');
+          setSaving(false);
+          return;
+        }
+        payload = {
+          name: nameInput.trim(),
+          city_id: selectedCityId,
+        };
+      }
+
       if (editItem) {
         if (activeDomain === 'countries') await masterDataService.updateCountry(editItem.id, payload);
         else if (activeDomain === 'cities') await masterDataService.updateCity(editItem.id, payload);
@@ -140,6 +188,10 @@ export default function AdminMasterDataView() {
 
       setModalVisible(false);
       fetchDomainItems(activeDomain);
+      masterDataService
+        .getCities()
+        .then((data) => setCitiesList(data || []))
+        .catch(() => {});
       if (Platform.OS === 'android') {
         ToastAndroid.show('Saved successfully', ToastAndroid.SHORT);
       }
@@ -198,7 +250,13 @@ export default function AdminMasterDataView() {
               <Pressable
                 key={d.id}
                 style={[styles.tabChip, active && styles.tabChipActive]}
-                onPress={() => setActiveDomain(d.id)}
+                onPress={() => {
+                  if (activeDomain !== d.id) {
+                    setItems([]);
+                    setSearchQuery('');
+                    setActiveDomain(d.id);
+                  }
+                }}
               >
                 <Ionicons name={d.icon} size={14} color={active ? '#FFFFFF' : '#6B7280'} />
                 <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>
@@ -239,7 +297,13 @@ export default function AdminMasterDataView() {
           />
         }
       >
-        {filteredItems.length === 0 ? (
+        {loading && !refreshing ? (
+          <View style={{ gap: 10 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </View>
+        ) : filteredItems.length === 0 ? (
           <EmptyState
             title={`No ${activeDomain} found`}
             subtitle="Tap the '+' button above to create a new entry."
@@ -250,7 +314,26 @@ export default function AdminMasterDataView() {
             <View key={item.id} style={styles.itemCard}>
               <View style={styles.itemTextCol}>
                 <Text style={styles.itemName}>{item.name || item.key || `ID #${item.id}`}</Text>
-                <Text style={styles.itemMeta}>ID: {item.id}</Text>
+                <Text style={styles.itemMeta}>
+                  ID: {item.id}
+                  {activeDomain === 'areas' && (
+                    <>
+                      {' • '}
+                      <Text style={{ fontWeight: '600', color: item.city || item.city_id ? '#0B5A3E' : '#EF4444' }}>
+                        {(() => {
+                          const cId =
+                            item.city_id !== undefined && item.city_id !== null
+                              ? item.city_id
+                              : typeof item.city === 'object' && item.city !== null
+                              ? item.city.id
+                              : item.city;
+                          const cObj = citiesList.find((c) => c.id === cId) || (typeof item.city === 'object' ? item.city : null);
+                          return cObj ? `City: ${cObj.name}` : 'Unassigned City';
+                        })()}
+                      </Text>
+                    </>
+                  )}
+                </Text>
               </View>
 
               <View style={styles.actionGroup}>
@@ -278,6 +361,39 @@ export default function AdminMasterDataView() {
               value={nameInput}
               onChangeText={setNameInput}
             />
+
+            {/* City Selector when creating/editing an Area */}
+            {activeDomain === 'areas' && (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#374151' }}>
+                  Assign to City:
+                </Text>
+                {citiesList.length === 0 ? (
+                  <Text style={{ fontSize: 12, color: '#9CA3AF' }}>No cities found. Create a city first.</Text>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
+                    {citiesList.map((c) => {
+                      const active = selectedCityId === c.id;
+                      return (
+                        <Pressable
+                          key={c.id}
+                          style={[
+                            styles.cityChip,
+                            active && styles.cityChipActive,
+                          ]}
+                          onPress={() => setSelectedCityId(c.id)}
+                        >
+                          <Ionicons name="business-outline" size={14} color={active ? '#FFFFFF' : '#4B5563'} />
+                          <Text style={[styles.cityChipText, active && styles.cityChipTextActive]}>
+                            {c.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+              </View>
+            )}
 
             <View style={styles.modalBtnRow}>
               <Pressable style={styles.cancelBtn} onPress={() => setModalVisible(false)} disabled={saving}>
@@ -461,5 +577,28 @@ const styles = StyleSheet.create({
   saveText: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  cityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  cityChipActive: {
+    backgroundColor: '#0B5A3E',
+    borderColor: '#0B5A3E',
+  },
+  cityChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  cityChipTextActive: {
+    color: '#FFFFFF',
   },
 });

@@ -177,7 +177,7 @@ export default function DrawerPanel({
             }}
           >
             <Ionicons name="location-outline" size={20} color="#374151" style={styles.drawerItemIcon} />
-            <Text style={styles.drawerItemLabel}>Saved Addresses</Text>
+            <Text style={styles.drawerItemLabel}>Saved Address</Text>
           </Pressable>
 
           <Pressable

@@ -96,16 +96,28 @@ export default function ProfileSetupScreen() {
     ? areasList
         .filter((a: any) => {
           if (!a || !a.name) return false;
-          // a.city can be: a plain number ID, an object { id, name }, or undefined/null
           const areaCityId =
-            a.city === null || a.city === undefined
-              ? null
-              : typeof a.city === 'object'
-              ? a.city?.id
-              : a.city; // plain number
-          // If the area has no city association, include it (fallback)
-          if (areaCityId === null || areaCityId === undefined) return true;
-          return String(areaCityId) === String(matchedCityObj.id);
+            a.city_id !== undefined && a.city_id !== null
+              ? a.city_id
+              : typeof a.city === 'object' && a.city !== null
+              ? a.city.id
+              : typeof a.city === 'number'
+              ? a.city
+              : null;
+
+          const areaCityName =
+            typeof a.city === 'object' && a.city?.name
+              ? a.city.name
+              : (a as any).city_name || (a as any).cityName || null;
+
+          if (areaCityId !== null && areaCityId !== undefined) {
+            return String(areaCityId) === String(matchedCityObj.id);
+          }
+          if (areaCityName) {
+            return areaCityName.toLowerCase() === selectedCity.toLowerCase();
+          }
+          // Fallback: If area has no city assigned (city: null), include it so list is not empty
+          return true;
         })
         .map((a) => a.name)
     : areasList.filter((a) => a && a.name).map((a) => a.name);
@@ -433,3 +445,4 @@ export default function ProfileSetupScreen() {
     </SafeAreaView>
   );
 }
+

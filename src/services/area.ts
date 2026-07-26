@@ -25,7 +25,7 @@ export const createArea = async (cityId: number, name: string): Promise<Area> =>
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, city: cityId }),
+        body: JSON.stringify({ name, city_id: cityId }),
     });
     return response.json();
 };

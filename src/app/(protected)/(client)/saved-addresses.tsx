@@ -47,6 +47,37 @@ export default function SavedAddressesScreen() {
   const [latitude, setLatitude] = useState<number>(31.5204); // Defaults
   const [longitude, setLongitude] = useState<number>(74.3587);
 
+  // Filter areas based on the currently selected city
+  const matchedCityObj = citiesList.find(
+    (c) => c.name.toLowerCase() === city.toLowerCase()
+  );
+
+  const filteredAreas = areasList.filter((a: any) => {
+    if (!a || !a.name) return false;
+    const areaCityId =
+      a.city_id !== undefined && a.city_id !== null
+        ? a.city_id
+        : typeof a.city === 'object' && a.city !== null
+        ? a.city.id
+        : typeof a.city === 'number'
+        ? a.city
+        : null;
+
+    const areaCityName =
+      typeof a.city === 'object' && a.city?.name
+        ? a.city.name
+        : (a as any).city_name || (a as any).cityName || null;
+
+    if (matchedCityObj && areaCityId !== null && areaCityId !== undefined) {
+      return String(areaCityId) === String(matchedCityObj.id);
+    }
+    if (city && areaCityName) {
+      return areaCityName.toLowerCase() === city.toLowerCase();
+    }
+    // Fallback: If area has no city assigned (city: null), include it so list is not empty
+    return true;
+  });
+
   useEffect(() => {
     const fetchAddressAndMetadata = async () => {
       setIsLoading(true);
@@ -259,7 +290,10 @@ export default function SavedAddressesScreen() {
                         key={c.id}
                         style={styles.dropdownItem}
                         onPress={() => {
-                          setCity(c.name);
+                          if (city !== c.name) {
+                            setCity(c.name);
+                            setArea('');
+                          }
                           setShowCityDropdown(false);
                         }}
                       >
@@ -292,7 +326,7 @@ export default function SavedAddressesScreen() {
               {showAreaDropdown && (
                 <View style={styles.dropdownList}>
                   <ScrollView nestedScrollEnabled style={{ maxHeight: 180 }}>
-                    {areasList.map((a) => (
+                    {filteredAreas.map((a) => (
                       <Pressable
                         key={a.id}
                         style={styles.dropdownItem}
