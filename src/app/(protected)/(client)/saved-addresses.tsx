@@ -78,18 +78,21 @@ export default function SavedAddressesScreen() {
     return true;
   });
 
-  useEffect(() => {
-    const fetchAddressAndMetadata = async () => {
-      setIsLoading(true);
-      try {
-        console.log('[SavedAddresses] Fetching cities and areas from API...');
-        const citiesData = await getCities();
-        const areasData = await getAreas();
-        setCitiesList(citiesData);
-        setAreasList(areasData);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-        const locationId = user?.location_id || user?.location?.id;
-        if (locationId) {
+  const fetchAddressAndMetadata = async () => {
+    setIsLoading(true);
+    setFetchError(null);
+    try {
+      console.log('[SavedAddresses] Fetching cities and areas from API...');
+      const citiesData = await getCities();
+      const areasData = await getAreas();
+      setCitiesList(citiesData);
+      setAreasList(areasData);
+
+      const locationId = user?.location_id || user?.location?.id;
+      if (locationId) {
+        try {
           console.log('[SavedAddresses] Fetching address details for location ID:', locationId);
           const loc = await getLocationById(locationId);
 
@@ -117,17 +120,22 @@ export default function SavedAddressesScreen() {
           } else if (typeof loc.area === 'object' && (loc.area as any)?.name) {
             setArea((loc.area as any).name);
           }
+        } catch (locErr) {
+          console.warn('[SavedAddresses] Non-fatal error fetching location details:', locErr);
         }
-
-        // Country is hardcoded as requested
-        setCountry('Pakistan');
-      } catch (err) {
-        console.error('[SavedAddresses] Error fetching address or metadata:', err);
-      } finally {
-        setIsLoading(false);
       }
-    };
 
+      // Country is hardcoded as requested
+      setCountry('Pakistan');
+    } catch (err: any) {
+      console.error('[SavedAddresses] Error fetching address or metadata:', err);
+      setFetchError(err?.message || 'Connection timed out. Server is not responding.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchAddressAndMetadata();
   }, [user?.location_id]);
 
@@ -153,50 +161,38 @@ export default function SavedAddressesScreen() {
       return;
     }
 
-    setIsSaving(true);
     try {
-      const finalAddress = formattedAddress.trim() ||
-        `House ${houseNumber}, Street ${streetNumber.trim()}, ${area.trim()}, ${city.trim()}`;
+      setIsSaving(true);
+      const selectedCityObj = citiesList.find((c) => c.name.toLowerCase() === city.toLowerCase());
+      const selectedAreaObj = areasList.find((a) => a.name.toLowerCase() === area.toLowerCase());
 
-      console.log('[SavedAddresses] Resolving location chain...');
-      const resolvedLoc = await getOrCreateLocationChain({
-        countryName: 'Pakistan',
-        cityName: city.trim(),
-        areaName: area.trim(),
+      const payload = {
+        countryName: country,
+        cityName: city,
+        areaName: area,
+        resolvedCountryId: 1,
+        resolvedCityId: selectedCityObj?.id,
+        resolvedAreaId: selectedAreaObj?.id,
         houseNumber: houseNumber.toString(),
-        streetNumber: streetNumber.trim(),
+        streetNumber,
         latitude,
         longitude,
         zipCode: zipCode.toString(),
-        formatted_address: finalAddress,
-      });
+        formatted_address: formattedAddress || `${houseNumber}, ${streetNumber}, ${area}, ${city}`,
+      };
 
-      const locationId = resolvedLoc.id;
-      if (!locationId) {
-        throw new Error('Failed to resolve or save location profile.');
-      }
-      console.log('[SavedAddresses] Location resolved with ID:', locationId);
+      const newLocation = await getOrCreateLocationChain(payload);
 
-      // Link to user profile on backend
-      if (user?.id) {
-        console.log('[SavedAddresses] Linking location ID to user on backend...');
-        await updateUserOnBackend(user.id, { location_id: locationId });
+      if (user && user.id) {
+        await updateUserOnBackend(user.id, { location: newLocation.id });
+        await login({ ...user, location_id: newLocation.id, location: newLocation });
       }
 
-      // Sync local state
-      const updatedUser = {
-        ...user,
-        location_id: locationId,
-        location: resolvedLoc,
-      } as any;
-
-      await login(updatedUser);
-      Alert.alert('Success', 'Address updated successfully!', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      Alert.alert('Success', 'Address updated successfully!');
+      router.back();
     } catch (err: any) {
-      console.error('[SavedAddresses] Error saving address:', err);
-      Alert.alert('Error', err.message || 'Failed to update address. Please try again.');
+      console.error('[SavedAddresses] Failed to save address:', err);
+      Alert.alert('Error', err?.message || 'Failed to update address. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -205,7 +201,31 @@ export default function SavedAddressesScreen() {
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
-        <ActivityIndicator size="large" color="#16A34A" />
+        <ActivityIndicator size="large" color="#0B5A3E" />
+        <Text style={{ marginTop: 12, fontSize: 14, color: '#6B7280', fontWeight: '500' }}>
+          Loading address details...
+        </Text>
+      </View>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <View style={styles.errorContainer}>
+        <View style={styles.errorCard}>
+          <Ionicons name="cloud-offline-outline" size={48} color="#EF4444" style={{ marginBottom: 12 }} />
+          <Text style={styles.errorTitle}>Failed to Load Address</Text>
+          <Text style={styles.errorMessage}>{fetchError}</Text>
+
+          <Pressable style={styles.retryBtn} onPress={fetchAddressAndMetadata}>
+            <Ionicons name="refresh" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+            <Text style={styles.retryBtnText}>Retry / Refresh</Text>
+          </Pressable>
+
+          <Pressable style={styles.cancelLink} onPress={() => router.back()}>
+            <Text style={styles.cancelLinkText}>Go Back</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -559,5 +579,64 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1F2937',
     fontWeight: '500',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#F9FAFB',
+  },
+  errorCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0B5A3E',
+    height: 46,
+    borderRadius: 12,
+    width: '100%',
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  cancelLink: {
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  cancelLinkText: {
+    color: '#6B7280',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
