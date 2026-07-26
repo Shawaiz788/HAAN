@@ -70,6 +70,13 @@ export const masterDataService = {
   updateCategory: (id: number, payload: any) => updateItem<any>('category', id, payload),
   deleteCategory: (id: number) => deleteItem('category', id),
 
+  // Subcategories
+  getSubcategories: () => fetchList<any>('subcategory'),
+  createSubcategory: (payload: any) => createItem<any>('subcategory', payload),
+  getSubcategoryById: (id: number) => getItemById<any>('subcategory', id),
+  updateSubcategory: (id: number, payload: any) => updateItem<any>('subcategory', id, payload),
+  deleteSubcategory: (id: number) => deleteItem('subcategory', id),
+
   // Countries
   getCountries: () => fetchList<any>('country'),
   createCountry: (payload: any) => createItem<any>('country', payload),

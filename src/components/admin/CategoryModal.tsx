@@ -12,20 +12,16 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Category } from '@/types/category';
+import IconColorPicker from './category/IconColorPicker';
 
-export interface AdminCategoryItem {
-  id?: number;
-  name: string;
-  commissionRate: number;
-  active: boolean;
-  totalJobs?: number;
-}
+export interface AdminCategoryItem extends Category {}
 
 interface CategoryModalProps {
-  category: AdminCategoryItem | null;
+  category: Category | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (cat: AdminCategoryItem) => void;
+  onSave: (cat: Category) => void;
 }
 
 export default function CategoryModal({
@@ -35,18 +31,18 @@ export default function CategoryModal({
   onSave,
 }: CategoryModalProps) {
   const [name, setName] = useState('');
-  const [commissionRate, setCommissionRate] = useState('10');
-  const [active, setActive] = useState(true);
+  const [color, setColor] = useState('#10B981');
+  const [image, setImage] = useState('flash');
 
   useEffect(() => {
     if (category) {
       setName(category.name || '');
-      setCommissionRate(category.commissionRate ? String(category.commissionRate) : '10');
-      setActive(category.active ?? true);
+      setColor(category.color || '#10B981');
+      setImage(category.image || 'flash');
     } else {
       setName('');
-      setCommissionRate('10');
-      setActive(true);
+      setColor('#10B981');
+      setImage('flash');
     }
   }, [category, isOpen]);
 
@@ -57,18 +53,17 @@ export default function CategoryModal({
       Alert.alert('Validation Error', 'Category name is required.');
       return;
     }
-    const rateNum = Number(commissionRate);
-    if (isNaN(rateNum) || rateNum < 0 || rateNum > 100) {
-      Alert.alert('Validation Error', 'Commission rate must be a valid percentage between 0 and 100.');
-      return;
+
+    const payload: Category = {
+      name: name.trim(),
+      color,
+      image,
+    };
+    if (category?.id) {
+      payload.id = category.id;
     }
 
-    onSave({
-      id: category?.id,
-      name: name.trim(),
-      commissionRate: rateNum,
-      active,
-    });
+    onSave(payload);
 
     if (Platform.OS === 'android') {
       ToastAndroid.show(`Category ${category ? 'updated' : 'created'} successfully!`, ToastAndroid.SHORT);
@@ -92,7 +87,7 @@ export default function CategoryModal({
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {/* Category Name Input */}
             <View style={styles.inputWrapper}>
-              <Text style={styles.label}>Category Name</Text>
+              <Text style={styles.label}>Category Name *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Electrician, Plumbing, AC Repair"
@@ -102,31 +97,13 @@ export default function CategoryModal({
               />
             </View>
 
-            {/* Platform Commission Rate Input */}
-            <View style={styles.inputWrapper}>
-              <Text style={styles.label}>Platform Commission Fee (%)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 10"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="numeric"
-                value={commissionRate}
-                onChangeText={setCommissionRate}
-              />
-            </View>
-
-            {/* Status Toggle */}
-            <View style={styles.statusToggleRow}>
-              <Text style={styles.label}>Category Active Status</Text>
-              <Pressable
-                style={[styles.toggleBtn, active ? styles.toggleBtnActive : styles.toggleBtnInactive]}
-                onPress={() => setActive(!active)}
-              >
-                <Text style={[styles.toggleBtnText, active ? styles.toggleTextActive : styles.toggleTextInactive]}>
-                  {active ? 'ACTIVE' : 'INACTIVE'}
-                </Text>
-              </Pressable>
-            </View>
+            {/* Icon & Theme Color Selector */}
+            <IconColorPicker
+              selectedIcon={image}
+              selectedColor={color}
+              onSelectIcon={setImage}
+              onSelectColor={setColor}
+            />
 
             {/* Save Action Button */}
             <Pressable style={styles.saveBtn} onPress={handleSubmit}>
@@ -153,7 +130,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '85%',
+    maxHeight: '90%',
     paddingBottom: 20,
   },
   sheetHeader: {

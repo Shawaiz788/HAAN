@@ -184,7 +184,7 @@ export default function SavedAddressesScreen() {
       const newLocation = await getOrCreateLocationChain(payload);
 
       if (user && user.id) {
-        await updateUserOnBackend(user.id, { location: newLocation.id });
+        await updateUserOnBackend(user.id, { location_id: newLocation.id });
         await login({ ...user, location_id: newLocation.id, location: newLocation });
       }
 

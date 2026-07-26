@@ -43,7 +43,8 @@ export interface User {
   password?: string;
   overall_rating?: number;
   usertype_id: number;
-  location_id: number;
+  location_id?: number;
+  location?: any;
   profile_pic?: string;
   image?: string;
 }
@@ -146,10 +147,7 @@ export interface Task {
 }
 
 // ─── Backend API task models ──────────────────────────────────────────────────
-export interface Category {
-  id: number;
-  name: string;
-}
+export * from './category';
 
 export interface PaymentPreference {
   id: number;

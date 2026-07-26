@@ -26,6 +26,17 @@ interface HomeCategoryListProps {
   setActiveCategory: (category: string) => void;
 }
 
+const getLightBg = (hex: string) => {
+  const cleanHex = (hex || '').replace('#', '');
+  if (cleanHex.length === 6) {
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, 0.14)`;
+  }
+  return 'rgba(16, 185, 129, 0.14)';
+};
+
 export default function HomeCategoryList({
   sheetState,
   showAllCategories,
@@ -52,7 +63,7 @@ export default function HomeCategoryList({
                 ))
               ) : (
                 categories.map((cat) => {
-                  const style = getCategoryStyle(cat.name);
+                  const style = getCategoryStyle(cat);
                   const isSelected = activeCategory === cat.name;
                   return (
                     <Pressable
@@ -60,7 +71,7 @@ export default function HomeCategoryList({
                       style={[styles.categoryGridCard, isSelected && styles.categoryGridCardSelected]}
                       onPress={() => setActiveCategory(cat.name)}
                     >
-                      <View style={[styles.categoryIconCircle, { backgroundColor: style.color + '15' }]}>
+                      <View style={[styles.categoryIconCircle, { backgroundColor: getLightBg(style.color) }]}>
                         <Ionicons name={style.icon as any} size={22} color={isSelected ? '#10B981' : style.color} />
                       </View>
                       <Text style={[styles.categoryGridLabel, isSelected && styles.categoryGridLabelSelected]} numberOfLines={1}>
@@ -84,7 +95,7 @@ export default function HomeCategoryList({
                   ))
                 ) : (
                   categories.map((cat) => {
-                    const style = getCategoryStyle(cat.name);
+                    const style = getCategoryStyle(cat);
                     const isSelected = activeCategory === cat.name;
                     return (
                       <Pressable
@@ -92,7 +103,7 @@ export default function HomeCategoryList({
                         style={[styles.categoryGridCard, isSelected && styles.categoryGridCardSelected]}
                         onPress={() => setActiveCategory(cat.name)}
                       >
-                        <View style={[styles.categoryIconCircle, { backgroundColor: style.color + '15' }]}>
+                        <View style={[styles.categoryIconCircle, { backgroundColor: getLightBg(style.color) }]}>
                           <Ionicons name={style.icon as any} size={22} color={isSelected ? '#10B981' : style.color} />
                         </View>
                         <Text style={[styles.categoryGridLabel, isSelected && styles.categoryGridLabelSelected]} numberOfLines={1}>
@@ -134,7 +145,7 @@ export default function HomeCategoryList({
             ))
           ) : (
             categories.map((cat) => {
-              const style = getCategoryStyle(cat.name);
+              const style = getCategoryStyle(cat);
               const isSelected = activeCategory === cat.name;
               return (
                 <Pressable
@@ -142,7 +153,7 @@ export default function HomeCategoryList({
                   style={[styles.categoryCard, isSelected && styles.categoryCardSelected]}
                   onPress={() => setActiveCategory(cat.name)}
                 >
-                  <View style={[styles.categoryIconCircle, { backgroundColor: style.color + '15' }]}>
+                  <View style={[styles.categoryIconCircle, { backgroundColor: getLightBg(style.color) }]}>
                     <Ionicons name={style.icon as any} size={22} color={isSelected ? '#10B981' : style.color} />
                   </View>
                   <Text style={[styles.categoryLabel, isSelected && styles.categoryLabelSelected]}>

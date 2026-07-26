@@ -2,46 +2,41 @@ import { create } from 'zustand';
 import { getCategoriesFromBackend } from '@/services/task';
 import { Category } from '@/types';
 
-// ─── Icon / colour mapping (driven by category name) ──────────────────────────
-// Mirrors the same mapping used in HomeView's getCategoryStyle for consistency.
-const NAME_STYLE_MAP: Record<string, { icon: string; color: string }> = {
-    'electrician': { icon: 'flash',               color: '#F97316' },
-    'plumber':     { icon: 'build',               color: '#A855F7' },
-    'ac service':  { icon: 'snow',                color: '#3B82F6' },
-    'tutor':       { icon: 'school',              color: '#10B981' },
-    'mehndi':      { icon: 'leaf',                color: '#84CC16' },
-    'cleaning':    { icon: 'sparkles',            color: '#EAB308' },
-    'painter':     { icon: 'brush',               color: '#EC4899' },
-    'mason':       { icon: 'construct',           color: '#EF4444' },
-    'other':       { icon: 'ellipsis-horizontal', color: '#6B7280' },
-};
-
-const FALLBACK_COLORS = ['#F97316', '#A855F7', '#3B82F6', '#10B981', '#84CC16', '#EAB308', '#EC4899', '#EF4444', '#6366F1'];
-const FALLBACK_ICONS  = ['flash',   'build',   'snow',   'school',  'leaf',    'sparkles', 'brush',  'construct', 'briefcase'];
-
-/** Resolve the icon name + accent colour for any category name string. */
-export function getCategoryStyle(name: string): { icon: string; color: string } {
-    const normalized = name.trim().toLowerCase();
-
-    if (NAME_STYLE_MAP[normalized]) return NAME_STYLE_MAP[normalized];
-
-    // Partial-match fallback
-    for (const key of Object.keys(NAME_STYLE_MAP)) {
-        if (normalized.includes(key) || key.includes(normalized)) {
-            return NAME_STYLE_MAP[key];
-        }
+/** Resolve the icon name + accent color dynamically from category backend metadata. */
+export function getCategoryStyle(catOrName?: any): { icon: string; color: string } {
+    if (!catOrName) {
+        return { icon: 'flash', color: '#10B981' };
     }
 
-    // Deterministic hash fallback so the same unknown name always gets the same style
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    // 1. If a category object is passed directly (e.g. from backend list)
+    if (typeof catOrName === 'object' && catOrName !== null) {
+        const icon = catOrName.image || catOrName.icon || 'flash';
+        const color = catOrName.color || '#10B981';
+        return { icon, color };
     }
-    const index = Math.abs(hash) % FALLBACK_COLORS.length;
-    return { icon: FALLBACK_ICONS[index], color: FALLBACK_COLORS[index] };
+
+    // 2. If a category string (name) or number (id) is passed, resolve from loaded categories
+    const storeCategories = useCategoryStore.getState().categories || [];
+    const searchStr = String(catOrName).trim().toLowerCase();
+
+    const matched = storeCategories.find(
+        (c) =>
+            String(c.id) === searchStr ||
+            c.name.toLowerCase() === searchStr ||
+            c.name.toLowerCase().includes(searchStr)
+    );
+
+    if (matched) {
+        return {
+            icon: (matched as any).image || (matched as any).icon || 'flash',
+            color: matched.color || '#10B981',
+        };
+    }
+
+    return { icon: 'flash', color: '#10B981' };
 }
 
-// ─── Store ─────────────────────────────────────────────────────────────────────
+// ─── Category Store ─────────────────────────────────────────────────────────────
 
 interface CategoryStoreState {
     /** Flat list fetched from the API. Empty until first successful fetch. */
@@ -57,7 +52,7 @@ interface CategoryStoreState {
     /** Look up a category by its numeric id. Returns undefined if not loaded yet. */
     getCategoryById: (id: number) => Category | undefined;
 
-    /** Convenience: icon + color for a given category id. */
+    /** Convenience: icon + color for a given category id or name. */
     getStyleById: (id: number) => { icon: string; color: string };
 }
 
@@ -86,7 +81,7 @@ const useCategoryStore = create<CategoryStoreState>((set, get) => ({
 
     getStyleById: (id) => {
         const cat = get().categories.find((c) => c.id === id);
-        return getCategoryStyle(cat?.name ?? '');
+        return getCategoryStyle(cat);
     },
 }));
 

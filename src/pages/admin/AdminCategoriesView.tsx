@@ -16,41 +16,79 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/auth';
 import AdminHeader from '@/components/admin/AdminHeader';
 import AdminDrawerPanel from '@/components/admin/AdminDrawerPanel';
-import CategoryModal, { AdminCategoryItem } from '@/components/admin/CategoryModal';
+import CategoryModal from '@/components/admin/CategoryModal';
+import CategoryCard from '@/components/admin/category/CategoryCard';
+import SubCategoryModal from '@/components/admin/category/SubCategoryModal';
 import EmptyState from '@/components/admin/common/EmptyState';
 import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
-import { masterDataService } from '@/services/masterData';
+import { categoryService } from '@/services/category';
+import { Category, SubCategory } from '@/types/category';
 
 export default function AdminCategoriesView() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [categories, setCategories] = useState<AdminCategoryItem[]>([]);
+
+  // Data states
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<SubCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCat, setSelectedCat] = useState<AdminCategoryItem | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
 
-  // Delete state
-  const [deleteId, setDeleteId] = useState<number | null>(null);
+  // Category Modal state
+  const [selectedCat, setSelectedCat] = useState<Category | null>(null);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+
+  // SubCategory Modal state
+  const [parentCatForSub, setParentCatForSub] = useState<Category | null>(null);
+  const [selectedSubCat, setSelectedSubCat] = useState<SubCategory | null>(null);
+  const [subModalOpen, setSubModalOpen] = useState(false);
+
+  // Delete dialog state
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'category' | 'subcategory'; id: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchCategories = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const data = await masterDataService.getCategories();
-      const formatted: AdminCategoryItem[] = data.map((c: any) => ({
+      const [catData, subData] = await Promise.all([
+        categoryService.getCategories(),
+        categoryService.getSubcategories(),
+      ]);
+
+      const formattedCats: Category[] = catData.map((c: any) => ({
         id: Number(c.id),
         name: c.name || `Category #${c.id}`,
-        commissionRate: Number(c.commission_rate || c.commissionRate || 10),
-        active: c.active !== false && c.is_active !== false,
-        totalJobs: Number(c.total_jobs || c.jobs_count || 0),
+        color: c.color || '#10B981',
+        image: c.image || 'flash',
       }));
-      setCategories(formatted);
+
+      const formattedSubs: SubCategory[] = subData.map((s: any) => {
+        const catId =
+          s.category_id !== undefined && s.category_id !== null
+            ? Number(s.category_id)
+            : typeof s.category === 'object' && s.category !== null
+            ? Number(s.category.id)
+            : typeof s.category === 'number'
+            ? Number(s.category)
+            : undefined;
+
+        return {
+          id: Number(s.id),
+          name: s.name || `Subcategory #${s.id}`,
+          color: s.color || '#10B981',
+          image: s.image || 'flash',
+          category_id: catId,
+          base_price: Number(s.base_price || s.basePrice || 0),
+        };
+      });
+
+      setCategories(formattedCats);
+      setSubcategories(formattedSubs);
     } catch (err: any) {
-      console.warn('[AdminCategoriesView] Error loading categories from endpoint:', err);
+      console.warn('[AdminCategoriesView] Error loading data from endpoints:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -58,42 +96,41 @@ export default function AdminCategoriesView() {
   };
 
   useEffect(() => {
-    fetchCategories();
+    loadData();
   }, []);
 
-  const handleOpenAdd = () => {
+  // Category Actions
+  const handleOpenAddCategory = () => {
     setSelectedCat(null);
-    setModalOpen(true);
+    setCategoryModalOpen(true);
   };
 
-  const handleOpenEdit = (cat: AdminCategoryItem) => {
+  const handleOpenEditCategory = (cat: Category) => {
     setSelectedCat(cat);
-    setModalOpen(true);
+    setCategoryModalOpen(true);
   };
 
-  const handleSaveCategory = async (savedCat: AdminCategoryItem) => {
+  const handleSaveCategory = async (savedCat: Category) => {
     try {
       if (savedCat.id) {
-        await masterDataService.updateCategory(savedCat.id, {
+        await categoryService.updateCategory(savedCat.id, {
           name: savedCat.name,
-          commission_rate: savedCat.commissionRate,
-          is_active: savedCat.active,
+          color: savedCat.color || '#10B981',
+          image: savedCat.image || 'flash',
         });
         setCategories((prev) =>
           prev.map((c) => (c.id === savedCat.id ? { ...c, ...savedCat } : c))
         );
       } else {
-        const created = await masterDataService.createCategory({
+        const created = await categoryService.createCategory({
           name: savedCat.name,
-          commission_rate: savedCat.commissionRate,
-          is_active: savedCat.active,
+          color: savedCat.color || '#10B981',
+          image: savedCat.image || 'flash',
         });
-        const newCat: AdminCategoryItem = {
+        const newCat: Category = {
+          ...savedCat,
           id: Number(created.id || Date.now()),
           name: created.name || savedCat.name,
-          commissionRate: savedCat.commissionRate,
-          active: savedCat.active,
-          totalJobs: 0,
         };
         setCategories((prev) => [newCat, ...prev]);
       }
@@ -103,58 +140,93 @@ export default function AdminCategoriesView() {
     }
   };
 
-  const handleDeleteCategory = async () => {
-    if (!deleteId) return;
-    try {
-      setDeleting(true);
-      await masterDataService.deleteCategory(deleteId);
-      setCategories((prev) => prev.filter((c) => c.id !== deleteId));
-      if (Platform.OS === 'android') {
-        ToastAndroid.show('Category deleted successfully', ToastAndroid.SHORT);
-      } else {
-        Alert.alert('Deleted', 'Category deleted successfully.');
-      }
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to delete category.');
-    } finally {
-      setDeleting(false);
-      setDeleteId(null);
+  // SubCategory Actions (Create on Spot & Edit)
+  const handleOpenAddSubCategory = (parentCat: Category) => {
+    setParentCatForSub(parentCat);
+    setSelectedSubCat(null);
+    setSubModalOpen(true);
+  };
+
+  const handleOpenEditSubCategory = (sub: SubCategory, parentCat: Category) => {
+    setParentCatForSub(parentCat);
+    setSelectedSubCat(sub);
+    setSubModalOpen(true);
+  };
+
+  const handleSubCategorySaved = (savedSub: SubCategory, isNew: boolean) => {
+    if (isNew) {
+      setSubcategories((prev) => [savedSub, ...prev]);
+    } else {
+      setSubcategories((prev) =>
+        prev.map((s) => (s.id === savedSub.id ? { ...s, ...savedSub } : s))
+      );
     }
   };
 
-  const filteredCategories = categories.filter((c) =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Delete Action
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleting(true);
+      if (deleteTarget.type === 'category') {
+        await categoryService.deleteCategory(deleteTarget.id);
+        setCategories((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+        setSubcategories((prev) => prev.filter((s) => s.category_id !== deleteTarget.id));
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('Category deleted', ToastAndroid.SHORT);
+        }
+      } else {
+        await categoryService.deleteSubcategory(deleteTarget.id);
+        setSubcategories((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('Subcategory deleted', ToastAndroid.SHORT);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to delete item.');
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  const filteredCategories = categories.filter((c) => {
+    const matchCat = c.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchSub = subcategories.some(
+      (s) => s.category_id === c.id && s.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    return matchCat || matchSub;
+  });
 
   return (
     <View style={styles.container}>
       <AdminHeader
         title="Service Categories"
-        subtitle={`Active Platform Categories (${filteredCategories.length})`}
+        subtitle={`Categories (${categories.length}) • Subcategories (${subcategories.length})`}
         onOpenDrawer={() => setDrawerOpen(true)}
         user={user}
       />
 
-      {/* Action Bar & Search */}
+      {/* Top Search and Add Category Bar */}
       <View style={styles.topBar}>
         <View style={styles.searchBarContainer}>
           <Ionicons name="search" size={18} color="#6B7280" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search categories..."
+            placeholder="Search categories or subcategories..."
             placeholderTextColor="#9CA3AF"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
         </View>
 
-        <Pressable style={styles.addBtn} onPress={handleOpenAdd}>
+        <Pressable style={styles.addBtn} onPress={handleOpenAddCategory}>
           <Ionicons name="add" size={20} color="#FFFFFF" />
-          <Text style={styles.addBtnText}>Add</Text>
+          <Text style={styles.addBtnText}>Category</Text>
         </Pressable>
       </View>
 
-      {/* Category List */}
+      {/* Scrollable Categories List */}
       <ScrollView
         style={styles.content}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 24, 36) }]}
@@ -164,15 +236,15 @@ export default function AdminCategoriesView() {
             refreshing={refreshing}
             onRefresh={() => {
               setRefreshing(true);
-              fetchCategories();
+              loadData();
             }}
             tintColor="#0B5A3E"
           />
         }
       >
         {loading && !refreshing ? (
-          <View style={{ gap: 10 }}>
-            {[1, 2, 3, 4, 5].map((i) => (
+          <View style={{ gap: 12 }}>
+            {[1, 2, 3, 4].map((i) => (
               <SkeletonCard key={i} />
             ))}
           </View>
@@ -180,64 +252,59 @@ export default function AdminCategoriesView() {
           <EmptyState
             title="No categories found"
             subtitle="No categories match your search query."
-            iconName="construct-outline"
+            iconName="grid-outline"
           />
         ) : (
-          filteredCategories.map((c) => (
-            <View key={c.id} style={styles.categoryCard}>
-              <View style={styles.catIconBox}>
-                <Ionicons name="construct" size={22} color="#0B5A3E" />
-              </View>
+          filteredCategories.map((cat) => {
+            const catSubs = subcategories.filter((s) => s.category_id === cat.id);
 
-              <View style={styles.catTextCol}>
-                <Text style={styles.catName}>{c.name}</Text>
-                <Text style={styles.catSub}>
-                  Fee: {c.commissionRate}% • Jobs: {c.totalJobs || 0}
-                </Text>
-              </View>
-
-              <View style={styles.rightCol}>
-                <View style={[styles.statusTag, c.active ? styles.tagActive : styles.tagInactive]}>
-                  <Text style={[styles.tagText, c.active ? styles.tagTextActive : styles.tagTextInactive]}>
-                    {c.active ? 'ACTIVE' : 'INACTIVE'}
-                  </Text>
-                </View>
-
-                <Pressable style={styles.editBtn} onPress={() => handleOpenEdit(c)}>
-                  <Ionicons name="create-outline" size={18} color="#0B5A3E" />
-                </Pressable>
-
-                <Pressable style={styles.deleteBtn} onPress={() => c.id && setDeleteId(c.id)}>
-                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                </Pressable>
-              </View>
-            </View>
-          ))
+            return (
+              <CategoryCard
+                key={cat.id}
+                category={cat}
+                subcategories={catSubs}
+                onEditCategory={handleOpenEditCategory}
+                onDeleteCategory={(id) => setDeleteTarget({ type: 'category', id })}
+                onAddSubCategory={handleOpenAddSubCategory}
+                onEditSubCategory={handleOpenEditSubCategory}
+                onDeleteSubCategory={(subId) => setDeleteTarget({ type: 'subcategory', id: subId })}
+              />
+            );
+          })
         )}
       </ScrollView>
 
+      {/* Modals */}
       <CategoryModal
         category={selectedCat}
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        isOpen={categoryModalOpen}
+        onClose={() => setCategoryModalOpen(false)}
         onSave={handleSaveCategory}
       />
 
+      <SubCategoryModal
+        parentCategory={parentCatForSub}
+        subCategory={selectedSubCat}
+        isOpen={subModalOpen}
+        onClose={() => setSubModalOpen(false)}
+        onSuccess={handleSubCategorySaved}
+      />
+
       <ConfirmDialog
-        visible={Boolean(deleteId)}
-        title="Delete Category"
-        message="Are you sure you want to delete this category? This action cannot be undone."
+        visible={Boolean(deleteTarget)}
+        title={deleteTarget?.type === 'category' ? 'Delete Category' : 'Delete Subcategory'}
+        message={`Are you sure you want to delete this ${deleteTarget?.type}? This action cannot be undone.`}
         confirmLabel="Delete"
         isDestructive
         isLoading={deleting}
-        onConfirm={handleDeleteCategory}
-        onCancel={() => setDeleteId(null)}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
       />
 
       <AdminDrawerPanel
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        activeRoute="dashboard"
+        activeRoute="categories"
       />
     </View>
   );
@@ -291,71 +358,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
-    gap: 10,
-  },
-  categoryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
     gap: 12,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  catIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#ECFDF5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  catTextCol: {
-    flex: 1,
-  },
-  catName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  catSub: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  rightCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  statusTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  tagActive: {
-    backgroundColor: '#ECFDF5',
-  },
-  tagInactive: {
-    backgroundColor: '#FEE2E2',
-  },
-  tagText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  tagTextActive: {
-    color: '#0B5A3E',
-  },
-  tagTextInactive: {
-    color: '#EF4444',
-  },
-  editBtn: {
-    padding: 6,
-  },
-  deleteBtn: {
-    padding: 6,
-    backgroundColor: '#FEF2F2',
-    borderRadius: 8,
   },
 });
