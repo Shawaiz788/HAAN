@@ -18,6 +18,7 @@ import AdminDrawerPanel from '@/components/admin/AdminDrawerPanel';
 import SearchBar from '@/components/admin/common/SearchBar';
 import EmptyState from '@/components/admin/common/EmptyState';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
+import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
 import { getAllReviews, deleteReview } from '@/services/adminReviews';
 import { AdminReviewItem } from '@/types/admin';
 
@@ -113,7 +114,13 @@ export default function AdminReviewsView() {
           />
         }
       >
-        {filteredReviews.length === 0 ? (
+        {loading && !refreshing ? (
+          <View style={{ gap: 10 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </View>
+        ) : filteredReviews.length === 0 ? (
           <EmptyState
             title="No reviews found"
             subtitle="No user reviews match your search query."

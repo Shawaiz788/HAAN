@@ -251,10 +251,10 @@ export const getUserReviews = async (userId: number, forceRefresh = false): Prom
         return cached.data;
     }
 
-    console.log(`[user API] Fetching reviews list from /app/review/ for user ID: ${userId}`);
+    //console.log(`[user API] Fetching reviews list from /app/review/ for user ID: ${userId}`);
     const response = await fetchWithAuth(`${API_URL}/app/review/`);
     const responseText = await response.text();
-    console.log('[user API] Get reviews status:', response.status);
+    //console.log('[user API] Get reviews status:', response.status);
 
     if (!response.ok) {
         if (response.status === 404) return [];

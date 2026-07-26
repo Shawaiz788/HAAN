@@ -19,6 +19,7 @@ import AdminDrawerPanel from '@/components/admin/AdminDrawerPanel';
 import SearchBar from '@/components/admin/common/SearchBar';
 import EmptyState from '@/components/admin/common/EmptyState';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
+import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
 import { getAllAttachments, deleteAttachment } from '@/services/attachment';
 import { AdminAttachmentItem } from '@/types/admin';
 
@@ -114,7 +115,13 @@ export default function AdminAttachmentsView() {
           />
         }
       >
-        {filtered.length === 0 ? (
+        {loading && !refreshing ? (
+          <View style={{ gap: 10 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </View>
+        ) : filtered.length === 0 ? (
           <EmptyState
             title="No attachments found"
             subtitle="Task file attachments will appear here."

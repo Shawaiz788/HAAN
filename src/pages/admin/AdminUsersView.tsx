@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  FlatList,
   ScrollView,
   Pressable,
+  RefreshControl,
+  ActivityIndicator,
+  ToastAndroid,
+  Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,8 +19,12 @@ import { useAuth } from '@/context/auth';
 import AdminHeader from '@/components/admin/AdminHeader';
 import AdminDrawerPanel from '@/components/admin/AdminDrawerPanel';
 import UserDetailModal, { AdminUserItem } from '@/components/admin/UserDetailModal';
+import CreateUserModal from '@/components/admin/CreateUserModal';
 import SearchBar from '@/components/admin/common/SearchBar';
 import EmptyState from '@/components/admin/common/EmptyState';
+import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
+import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
+import { getAdminUsers, deleteAdminUser, updateAdminUserById } from '@/services/adminUsers';
 
 const ROLE_FILTERS = [
   { id: 'all', label: 'All Roles' },
@@ -23,28 +33,93 @@ const ROLE_FILTERS = [
   { id: 3, label: 'Worker (3)' },
 ];
 
-const INITIAL_USERS: AdminUserItem[] = [
-  { id: 1, name: 'System Admin', phone: '+923000000000', email: 'admin@kaamkarwao.pk', usertype_id: 1, roleName: 'Admin', status: 'active', verified: true, rating: 5.0, totalTasks: 0, joinedDate: 'Jan 2026' },
-  { id: 2, name: 'Ali Khan', phone: '+923001234567', email: 'ali.khan@gmail.com', usertype_id: 2, roleName: 'Customer', status: 'active', verified: false, rating: 4.9, totalTasks: 14, joinedDate: 'Feb 2026' },
-  { id: 3, name: 'Zara Worker', phone: '+923009876543', email: 'zara.pro@gmail.com', usertype_id: 3, roleName: 'Worker', status: 'active', verified: true, rating: 4.8, totalTasks: 32, joinedDate: 'Feb 2026' },
-  { id: 4, name: 'Hassan Ahmed', phone: '+923011112222', email: 'hassan.a@yahoo.com', usertype_id: 2, roleName: 'Customer', status: 'active', verified: false, rating: 5.0, totalTasks: 5, joinedDate: 'Mar 2026' },
-  { id: 5, name: 'Usman Electrician', phone: '+923023334444', email: 'usman.tech@gmail.com', usertype_id: 3, roleName: 'Worker', status: 'suspended', verified: false, rating: 4.2, totalTasks: 19, joinedDate: 'Mar 2026' },
-];
+const PAGE_SIZE = 20;
 
 export default function AdminUsersView() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [users, setUsers] = useState<AdminUserItem[]>(INITIAL_USERS);
+  const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedRole, setSelectedRole] = useState<number | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<AdminUserItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+
+  const handleUserCreated = (newUser: AdminUserItem) => {
+    setUsers((prev) => [newUser, ...prev]);
+  };
+
+  const handleUserUpdated = (updatedUser: AdminUserItem) => {
+    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? { ...u, ...updatedUser } : u)));
+    if (selectedUser && selectedUser.id === updatedUser.id) {
+      setSelectedUser({ ...selectedUser, ...updatedUser });
+    }
+  };
+
+  // Delete User Dialog State
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Fetch Page 1
+  const fetchUsers = useCallback(async (targetPage = 1, isRefresh = false) => {
+    try {
+      if (isRefresh || targetPage === 1) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const res = await getAdminUsers(targetPage, PAGE_SIZE);
+
+      setUsers((prev: AdminUserItem[]): AdminUserItem[] => {
+        if (targetPage === 1 || isRefresh) {
+          return res.users;
+        }
+        // Deduplicate users by ID
+        const existingIds = new Set(prev.map((u) => u.id));
+        const newUnique = res.users.filter((u) => !existingIds.has(u.id));
+        return [...prev, ...newUnique];
+      });
+
+      setHasMore(res.hasMore);
+      setPage(targetPage);
+    } catch (err: any) {
+      console.error('[AdminUsersView] Error fetching paginated admin users:', err);
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(err?.message || 'Failed to load users', ToastAndroid.SHORT);
+      }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers(1);
+  }, [fetchUsers]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchUsers(1, true);
+  };
+
+  const handleLoadMore = () => {
+    if (!loading && !loadingMore && hasMore) {
+      fetchUsers(page + 1);
+    }
+  };
 
   const handleOpenUser = (u: AdminUserItem) => {
     if (u.usertype_id === 3) {
-      // Direct navigation to Professional Details screen
       router.push({ pathname: '/(protected)/(admin)/pro-detail', params: { id: u.id } });
     } else {
       setSelectedUser(u);
@@ -52,21 +127,59 @@ export default function AdminUsersView() {
     }
   };
 
-  const handleStatusChange = (userId: number, newStatus: 'active' | 'suspended') => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, status: newStatus } : u))
-    );
-    if (selectedUser && selectedUser.id === userId) {
-      setSelectedUser({ ...selectedUser, status: newStatus });
+  const handleStatusChange = async (userId: number, newStatus: 'active' | 'suspended') => {
+    try {
+      const is_active = newStatus === 'active';
+      await updateAdminUserById(userId, { is_active, status: newStatus });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, status: newStatus } : u))
+      );
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser({ ...selectedUser, status: newStatus });
+      }
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(`User status updated to ${newStatus}`, ToastAndroid.SHORT);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to update user status.');
     }
   };
 
-  const handleVerifyToggle = (userId: number) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, verified: !u.verified } : u))
-    );
-    if (selectedUser && selectedUser.id === userId) {
-      setSelectedUser({ ...selectedUser, verified: !selectedUser.verified });
+  const handleVerifyToggle = async (userId: number) => {
+    try {
+      const currentUser = users.find((u) => u.id === userId);
+      const newVerified = !currentUser?.verified;
+      await updateAdminUserById(userId, { is_verified: newVerified });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, verified: newVerified } : u))
+      );
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser({ ...selectedUser, verified: newVerified });
+      }
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(`Verification status updated`, ToastAndroid.SHORT);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to update verification status.');
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTargetId) return;
+    try {
+      setDeleting(true);
+      await deleteAdminUser(deleteTargetId);
+      setUsers((prev) => prev.filter((u) => u.id !== deleteTargetId));
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('User deleted successfully', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Success', 'User deleted successfully.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to delete user.');
+    } finally {
+      setDeleting(false);
+      setDeleteTargetId(null);
     }
   };
 
@@ -74,9 +187,94 @@ export default function AdminUsersView() {
     const matchesRole = selectedRole === 'all' || u.usertype_id === selectedRole;
     const matchesQuery =
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.phone.includes(searchQuery);
+      u.phone.includes(searchQuery) ||
+      (u.email && u.email.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesRole && matchesQuery;
   });
+
+  const renderUserItem = ({ item: u }: { item: AdminUserItem }) => (
+    <View style={styles.userCardWrapper}>
+      <Pressable style={styles.userCard} onPress={() => handleOpenUser(u)}>
+        <View
+          style={[
+            styles.userIconBox,
+            {
+              backgroundColor:
+                u.usertype_id === 1 ? '#ECFDF5' : u.usertype_id === 3 ? '#FEF3C7' : '#EFF6FF',
+            },
+          ]}
+        >
+          <Ionicons
+            name={u.usertype_id === 1 ? 'shield-checkmark' : u.usertype_id === 3 ? 'construct' : 'person'}
+            size={22}
+            color={u.usertype_id === 1 ? '#0B5A3E' : u.usertype_id === 3 ? '#D97706' : '#2563EB'}
+          />
+        </View>
+
+        <View style={styles.userInfoCol}>
+          <View style={styles.nameRow}>
+            <Text style={styles.userName}>{u.name}</Text>
+            {u.verified ? <Ionicons name="checkmark-circle" size={16} color="#0B5A3E" /> : null}
+          </View>
+          <Text style={styles.userPhone}>{u.phone}</Text>
+        </View>
+
+        <View style={styles.badgeAndDeleteRow}>
+          <View
+            style={[
+              styles.roleBadge,
+              {
+                backgroundColor:
+                  u.status === 'suspended'
+                    ? '#FEE2E2'
+                    : u.usertype_id === 1
+                    ? '#ECFDF5'
+                    : u.usertype_id === 3
+                    ? '#FEF3C7'
+                    : '#EFF6FF',
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.roleBadgeText,
+                {
+                  color:
+                    u.status === 'suspended'
+                      ? '#EF4444'
+                      : u.usertype_id === 1
+                      ? '#0B5A3E'
+                      : u.usertype_id === 3
+                      ? '#D97706'
+                      : '#2563EB',
+                },
+              ]}
+            >
+              {u.status === 'suspended' ? 'SUSPENDED' : `${u.roleName} (ID ${u.usertype_id})`}
+            </Text>
+          </View>
+
+          <Pressable
+            style={styles.deleteBtn}
+            onPress={() => setDeleteTargetId(u.id)}
+            hitSlop={8}
+          >
+            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+          </Pressable>
+        </View>
+      </Pressable>
+    </View>
+  );
+
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoading}>
+        <ActivityIndicator size="small" color="#0B5A3E" />
+        <Text style={styles.footerText}>Loading more users (Page {page + 1})...</Text>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -87,114 +285,104 @@ export default function AdminUsersView() {
         user={user}
       />
 
-      {/* Role Filter Chips */}
+      {/* Role Filter & Add User Row */}
       <View style={styles.filterRow}>
-        {ROLE_FILTERS.map((f) => {
-          const active = selectedRole === f.id;
-          return (
-            <Pressable
-              key={String(f.id)}
-              style={[styles.filterChip, active && styles.filterChipActive]}
-              onPress={() => setSelectedRole(f.id as any)}
-            >
-              <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                {f.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipScroll}>
+          {ROLE_FILTERS.map((f) => {
+            const active = selectedRole === f.id;
+            return (
+              <Pressable
+                key={String(f.id)}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => setSelectedRole(f.id as any)}
+              >
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                  {f.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        <Pressable style={styles.addUserBtn} onPress={() => setCreateModalOpen(true)}>
+          <Ionicons name="add" size={18} color="#FFFFFF" />
+          <Text style={styles.addUserBtnText}>Add User</Text>
+        </Pressable>
       </View>
 
-      {/* Reusable Search Component */}
+      {/* Search Bar */}
       <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
         <SearchBar
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search user by name or phone..."
+          placeholder="Search user by name, email or phone..."
         />
       </View>
 
-      {/* User Directory */}
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 24, 36) }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {filteredUsers.length === 0 ? (
-          <EmptyState title="No users found" subtitle="Try adjusting your search query or role filter." />
-        ) : (
-          filteredUsers.map((u) => (
-            <Pressable key={u.id} style={styles.userCard} onPress={() => handleOpenUser(u)}>
-              <View
-                style={[
-                  styles.userIconBox,
-                  {
-                    backgroundColor:
-                      u.usertype_id === 1 ? '#ECFDF5' : u.usertype_id === 3 ? '#FEF3C7' : '#EFF6FF',
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={u.usertype_id === 1 ? 'shield-checkmark' : u.usertype_id === 3 ? 'construct' : 'person'}
-                  size={22}
-                  color={u.usertype_id === 1 ? '#0B5A3E' : u.usertype_id === 3 ? '#D97706' : '#2563EB'}
-                />
-              </View>
+      {/* Paginated User Directory FlatList */}
+      {loading && !refreshing && users.length === 0 ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </View>
+      ) : (
+        <FlatList
+          data={filteredUsers}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderUserItem}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom + 24, 36) },
+          ]}
+          showsVerticalScrollIndicator={false}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={renderFooter}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0B5A3E']} />
+          }
+          ListEmptyComponent={
+            <EmptyState
+              title="No users found"
+              subtitle="Try adjusting your search query or role filter."
+              onAction={onRefresh}
+              actionLabel="Refresh List"
+            />
+          }
+        />
+      )}
 
-              <View style={styles.userInfoCol}>
-                <View style={styles.nameRow}>
-                  <Text style={styles.userName}>{u.name}</Text>
-                  {u.verified ? <Ionicons name="checkmark-circle" size={16} color="#0B5A3E" /> : null}
-                </View>
-                <Text style={styles.userPhone}>{u.phone}</Text>
-              </View>
-
-              <View
-                style={[
-                  styles.roleBadge,
-                  {
-                    backgroundColor:
-                      u.status === 'suspended'
-                        ? '#FEE2E2'
-                        : u.usertype_id === 1
-                        ? '#ECFDF5'
-                        : u.usertype_id === 3
-                        ? '#FEF3C7'
-                        : '#EFF6FF',
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.roleBadgeText,
-                    {
-                      color:
-                        u.status === 'suspended'
-                          ? '#EF4444'
-                          : u.usertype_id === 1
-                          ? '#0B5A3E'
-                          : u.usertype_id === 3
-                          ? '#D97706'
-                          : '#2563EB',
-                    },
-                  ]}
-                >
-                  {u.status === 'suspended' ? 'SUSPENDED' : `${u.roleName} (ID ${u.usertype_id})`}
-                </Text>
-              </View>
-            </Pressable>
-          ))
-        )}
-      </ScrollView>
-
+      {/* User Detail & Edit Modal */}
       <UserDetailModal
         user={selectedUser}
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onStatusChange={handleStatusChange}
         onVerifyToggle={handleVerifyToggle}
+        onUserUpdated={handleUserUpdated}
       />
 
+      {/* Create User Modal */}
+      <CreateUserModal
+        isOpen={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onUserCreated={handleUserCreated}
+      />
+
+      {/* Delete User Confirmation Dialog */}
+      <ConfirmDialog
+        visible={deleteTargetId !== null}
+        title="Delete Platform User"
+        message="Are you sure you want to delete this user? This action is permanent and cannot be undone."
+        confirmLabel="Delete User"
+        isDestructive
+        isLoading={deleting}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTargetId(null)}
+      />
+
+      {/* Admin Drawer Navigation */}
       <AdminDrawerPanel
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -211,9 +399,28 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 12,
     gap: 8,
+  },
+  filterChipScroll: {
+    gap: 8,
+    alignItems: 'center',
+  },
+  addUserBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0B5A3E',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  addUserBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   filterChip: {
     paddingHorizontal: 12,
@@ -235,14 +442,14 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: '#FFFFFF',
   },
-  content: {
-    flex: 1,
-    marginTop: 12,
-  },
   scrollContent: {
     paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 24,
     gap: 10,
+  },
+  userCardWrapper: {
+    marginBottom: 2,
   },
   userCard: {
     flexDirection: 'row',
@@ -279,6 +486,11 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
+  badgeAndDeleteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   roleBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -287,5 +499,22 @@ const styles = StyleSheet.create({
   roleBadgeText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  deleteBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+  },
+  footerLoading: {
+    paddingVertical: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
   },
 });

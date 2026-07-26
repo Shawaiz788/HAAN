@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,10 @@ import {
   ScrollView,
   Pressable,
   TextInput,
+  RefreshControl,
+  Alert,
+  ToastAndroid,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,24 +17,49 @@ import { useAuth } from '@/context/auth';
 import AdminHeader from '@/components/admin/AdminHeader';
 import AdminDrawerPanel from '@/components/admin/AdminDrawerPanel';
 import CategoryModal, { AdminCategoryItem } from '@/components/admin/CategoryModal';
-
-const INITIAL_CATEGORIES: AdminCategoryItem[] = [
-  { id: 1, name: 'Electrician', commissionRate: 10, active: true, totalJobs: 42 },
-  { id: 2, name: 'Plumber', commissionRate: 10, active: true, totalJobs: 38 },
-  { id: 3, name: 'AC Repair', commissionRate: 12, active: true, totalJobs: 29 },
-  { id: 4, name: 'Carpenter', commissionRate: 8, active: true, totalJobs: 15 },
-  { id: 5, name: 'Painter', commissionRate: 8, active: false, totalJobs: 9 },
-  { id: 6, name: 'General Helper', commissionRate: 5, active: true, totalJobs: 54 },
-];
+import EmptyState from '@/components/admin/common/EmptyState';
+import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
+import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
+import { masterDataService } from '@/services/masterData';
 
 export default function AdminCategoriesView() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [categories, setCategories] = useState<AdminCategoryItem[]>(INITIAL_CATEGORIES);
+  const [categories, setCategories] = useState<AdminCategoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCat, setSelectedCat] = useState<AdminCategoryItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Delete state
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const fetchCategories = async () => {
+    try {
+      setLoading(true);
+      const data = await masterDataService.getCategories();
+      const formatted: AdminCategoryItem[] = data.map((c: any) => ({
+        id: Number(c.id),
+        name: c.name || `Category #${c.id}`,
+        commissionRate: Number(c.commission_rate || c.commissionRate || 10),
+        active: c.active !== false && c.is_active !== false,
+        totalJobs: Number(c.total_jobs || c.jobs_count || 0),
+      }));
+      setCategories(formatted);
+    } catch (err: any) {
+      console.warn('[AdminCategoriesView] Error loading categories from endpoint:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   const handleOpenAdd = () => {
     setSelectedCat(null);
@@ -42,18 +71,54 @@ export default function AdminCategoriesView() {
     setModalOpen(true);
   };
 
-  const handleSaveCategory = (savedCat: AdminCategoryItem) => {
-    if (savedCat.id) {
-      setCategories((prev) =>
-        prev.map((c) => (c.id === savedCat.id ? { ...c, ...savedCat } : c))
-      );
-    } else {
-      const newCat: AdminCategoryItem = {
-        ...savedCat,
-        id: Date.now(),
-        totalJobs: 0,
-      };
-      setCategories((prev) => [newCat, ...prev]);
+  const handleSaveCategory = async (savedCat: AdminCategoryItem) => {
+    try {
+      if (savedCat.id) {
+        await masterDataService.updateCategory(savedCat.id, {
+          name: savedCat.name,
+          commission_rate: savedCat.commissionRate,
+          is_active: savedCat.active,
+        });
+        setCategories((prev) =>
+          prev.map((c) => (c.id === savedCat.id ? { ...c, ...savedCat } : c))
+        );
+      } else {
+        const created = await masterDataService.createCategory({
+          name: savedCat.name,
+          commission_rate: savedCat.commissionRate,
+          is_active: savedCat.active,
+        });
+        const newCat: AdminCategoryItem = {
+          id: Number(created.id || Date.now()),
+          name: created.name || savedCat.name,
+          commissionRate: savedCat.commissionRate,
+          active: savedCat.active,
+          totalJobs: 0,
+        };
+        setCategories((prev) => [newCat, ...prev]);
+      }
+    } catch (err: any) {
+      console.error('[AdminCategoriesView] Save category error:', err);
+      Alert.alert('Error', err?.message || 'Failed to save category.');
+    }
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!deleteId) return;
+    try {
+      setDeleting(true);
+      await masterDataService.deleteCategory(deleteId);
+      setCategories((prev) => prev.filter((c) => c.id !== deleteId));
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Category deleted successfully', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Deleted', 'Category deleted successfully.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to delete category.');
+    } finally {
+      setDeleting(false);
+      setDeleteId(null);
     }
   };
 
@@ -94,33 +159,61 @@ export default function AdminCategoriesView() {
         style={styles.content}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 24, 36) }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              fetchCategories();
+            }}
+            tintColor="#0B5A3E"
+          />
+        }
       >
-        {filteredCategories.map((c) => (
-          <View key={c.id} style={styles.categoryCard}>
-            <View style={styles.catIconBox}>
-              <Ionicons name="construct" size={22} color="#0B5A3E" />
-            </View>
+        {loading && !refreshing ? (
+          <View style={{ gap: 10 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </View>
+        ) : filteredCategories.length === 0 ? (
+          <EmptyState
+            title="No categories found"
+            subtitle="No categories match your search query."
+            iconName="construct-outline"
+          />
+        ) : (
+          filteredCategories.map((c) => (
+            <View key={c.id} style={styles.categoryCard}>
+              <View style={styles.catIconBox}>
+                <Ionicons name="construct" size={22} color="#0B5A3E" />
+              </View>
 
-            <View style={styles.catTextCol}>
-              <Text style={styles.catName}>{c.name}</Text>
-              <Text style={styles.catSub}>
-                Fee: {c.commissionRate}% • Jobs: {c.totalJobs || 0}
-              </Text>
-            </View>
-
-            <View style={styles.rightCol}>
-              <View style={[styles.statusTag, c.active ? styles.tagActive : styles.tagInactive]}>
-                <Text style={[styles.tagText, c.active ? styles.tagTextActive : styles.tagTextInactive]}>
-                  {c.active ? 'ACTIVE' : 'INACTIVE'}
+              <View style={styles.catTextCol}>
+                <Text style={styles.catName}>{c.name}</Text>
+                <Text style={styles.catSub}>
+                  Fee: {c.commissionRate}% • Jobs: {c.totalJobs || 0}
                 </Text>
               </View>
 
-              <Pressable style={styles.editBtn} onPress={() => handleOpenEdit(c)}>
-                <Ionicons name="create-outline" size={18} color="#0B5A3E" />
-              </Pressable>
+              <View style={styles.rightCol}>
+                <View style={[styles.statusTag, c.active ? styles.tagActive : styles.tagInactive]}>
+                  <Text style={[styles.tagText, c.active ? styles.tagTextActive : styles.tagTextInactive]}>
+                    {c.active ? 'ACTIVE' : 'INACTIVE'}
+                  </Text>
+                </View>
+
+                <Pressable style={styles.editBtn} onPress={() => handleOpenEdit(c)}>
+                  <Ionicons name="create-outline" size={18} color="#0B5A3E" />
+                </Pressable>
+
+                <Pressable style={styles.deleteBtn} onPress={() => c.id && setDeleteId(c.id)}>
+                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                </Pressable>
+              </View>
             </View>
-          </View>
-        ))}
+          ))
+        )}
       </ScrollView>
 
       <CategoryModal
@@ -128,6 +221,17 @@ export default function AdminCategoriesView() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSave={handleSaveCategory}
+      />
+
+      <ConfirmDialog
+        visible={Boolean(deleteId)}
+        title="Delete Category"
+        message="Are you sure you want to delete this category? This action cannot be undone."
+        confirmLabel="Delete"
+        isDestructive
+        isLoading={deleting}
+        onConfirm={handleDeleteCategory}
+        onCancel={() => setDeleteId(null)}
       />
 
       <AdminDrawerPanel
@@ -223,7 +327,7 @@ const styles = StyleSheet.create({
   rightCol: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   statusTag: {
     paddingHorizontal: 8,
@@ -248,5 +352,10 @@ const styles = StyleSheet.create({
   },
   editBtn: {
     padding: 6,
+  },
+  deleteBtn: {
+    padding: 6,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
   },
 });

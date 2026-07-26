@@ -1,12 +1,22 @@
 import { User, BackendTask, Category, PaymentPreference, Status, UserLocation } from './index';
 
-export interface AdminUserItem extends User {
-  status?: 'active' | 'suspended';
+export interface AdminUserItem {
+  id: number;
+  name: string;
+  phone: string;
+  email?: string;
+  usertype_id: number;
+  roleName: string;
+  status: 'active' | 'suspended';
+  profile_pic?: string;
   verified?: boolean;
-  roleName?: string;
   rating?: number;
   totalTasks?: number;
   joinedDate?: string;
+  first_name?: string;
+  last_name?: string;
+  gender?: string;
+  location_id?: number;
 }
 
 export interface VerificationPayload {

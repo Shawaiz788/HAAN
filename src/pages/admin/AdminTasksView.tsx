@@ -20,6 +20,7 @@ import StatusBadge from '@/components/admin/common/StatusBadge';
 import SearchBar from '@/components/admin/common/SearchBar';
 import EmptyState from '@/components/admin/common/EmptyState';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
+import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
 import TaskDetailModal from '@/components/admin/TaskDetailModal';
 import { getAllTasks, deleteTask } from '@/services/adminTasks';
 import { BackendTask } from '@/types';
@@ -155,7 +156,13 @@ export default function AdminTasksView() {
           />
         }
       >
-        {filteredTasks.length === 0 ? (
+        {loading && !refreshing ? (
+          <View style={{ gap: 10 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </View>
+        ) : filteredTasks.length === 0 ? (
           <EmptyState
             title="No tasks found"
             subtitle="Try adjusting your status filter or search text."

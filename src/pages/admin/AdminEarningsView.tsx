@@ -19,6 +19,7 @@ import AdminDrawerPanel from '@/components/admin/AdminDrawerPanel';
 import SearchBar from '@/components/admin/common/SearchBar';
 import EmptyState from '@/components/admin/common/EmptyState';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
+import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
 import { getAllEarnings, deleteWorkerEarnings } from '@/services/adminEarnings';
 import { AdminEarningItem } from '@/types/admin';
 
@@ -114,7 +115,13 @@ export default function AdminEarningsView() {
           />
         }
       >
-        {filtered.length === 0 ? (
+        {loading && !refreshing ? (
+          <View style={{ gap: 10 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </View>
+        ) : filtered.length === 0 ? (
           <EmptyState
             title="No earnings records"
             subtitle="No professional earnings record matches your search."
