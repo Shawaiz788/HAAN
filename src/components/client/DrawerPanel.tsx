@@ -184,6 +184,17 @@ export default function DrawerPanel({
             style={styles.drawerItem}
             onPress={() => {
               onClose();
+              router.push('/wallet');
+            }}
+          >
+            <Ionicons name="wallet-outline" size={20} color="#374151" style={styles.drawerItemIcon} />
+            <Text style={styles.drawerItemLabel}>My Wallet</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.drawerItem}
+            onPress={() => {
+              onClose();
               router.push('/security-privacy');
             }}
           >
