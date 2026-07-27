@@ -12,7 +12,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { validateLocationServiceability } from '@/services/geofenceService';
+import { validateCoordinatesServiceability } from '@/services/geofenceService';
 
 interface PinAdjusterModalProps {
   visible: boolean;
@@ -157,7 +157,7 @@ export default function PinAdjusterModal({
         const areaVal = item.district || item.subregion || '';
         setAdjusterAddress(resolvedAddr);
 
-        const res = validateLocationServiceability(cityVal, areaVal, resolvedAddr);
+        const res = validateCoordinatesServiceability(lat, lng);
         setIsAvailable(res.isAvailable);
       } else {
         setAdjusterAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);

@@ -3,7 +3,7 @@ import { Alert, Keyboard, Platform, ToastAndroid } from 'react-native';
 import * as Location from 'expo-location';
 import { getLocationById } from '@/services/location';
 import { getCachedLocation, setCachedLocation, CachedLocation } from '@/utils/locationCache';
-import { initializeGeofenceService, validateLocationServiceability } from '@/services/geofenceService';
+import { initializeGeofenceService, validateCoordinatesServiceability } from '@/services/geofenceService';
 
 interface UseHomeViewLocationProps {
   user: any;
@@ -65,8 +65,8 @@ export function useHomeViewLocation({ user, webViewRef }: UseHomeViewLocationPro
         setLocArea(areaVal);
         setLocCity(cityVal);
 
-        // Geofence Validation
-        const result = validateLocationServiceability(cityVal, areaVal, resolvedAddress);
+        // Real-World Polygon Geofence Validation
+        const result = validateCoordinatesServiceability(lat, lng);
         setIsLocationAvailable(result.isAvailable);
         setUnavailabilityReason(result.message);
 
