@@ -83,7 +83,7 @@ export default function AdminMasterDataView() {
     masterDataService
       .getCities()
       .then((data) => setCitiesList(data || []))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Delete dialog state
@@ -139,10 +139,10 @@ export default function AdminMasterDataView() {
       item.city_id !== undefined && item.city_id !== null
         ? item.city_id
         : typeof item.city === 'object' && item.city !== null
-        ? item.city.id
-        : typeof item.city === 'number'
-        ? item.city
-        : citiesList[0]?.id || null;
+          ? item.city.id
+          : typeof item.city === 'number'
+            ? item.city
+            : citiesList[0]?.id || null;
     setSelectedCityId(cId);
     setModalVisible(true);
   };
@@ -192,7 +192,7 @@ export default function AdminMasterDataView() {
       masterDataService
         .getCities()
         .then((data) => setCitiesList(data || []))
-        .catch(() => {});
+        .catch(() => { });
       if (Platform.OS === 'android') {
         ToastAndroid.show('Saved successfully', ToastAndroid.SHORT);
       }
@@ -326,8 +326,8 @@ export default function AdminMasterDataView() {
                             item.city_id !== undefined && item.city_id !== null
                               ? item.city_id
                               : typeof item.city === 'object' && item.city !== null
-                              ? item.city.id
-                              : item.city;
+                                ? item.city.id
+                                : item.city;
                           const cObj = citiesList.find((c) => c.id === cId) || (typeof item.city === 'object' ? item.city : null);
                           return cObj ? `City: ${cObj.name}` : 'Unassigned City';
                         })()}
@@ -427,4 +427,4 @@ export default function AdminMasterDataView() {
     </View>
   );
 }
-);
+
