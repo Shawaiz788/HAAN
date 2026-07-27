@@ -3,6 +3,7 @@ import { View, Text, Pressable, ActivityIndicator, Animated } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { styles } from '@/styles/homeView.styles';
+import { AREA_POLYGONS } from '@/services/geofenceService';
 
 export const getLeafletHtml = (lat: number, lng: number) => `
 <!DOCTYPE html>
@@ -33,6 +34,22 @@ export const getLeafletHtml = (lat: number, lng: number) => `
       maxZoom: 20,
       subdomains: 'abcd'
     }).addTo(map);
+
+    // Render green area polygon highlights on map
+    var areaPolygons = ${JSON.stringify(AREA_POLYGONS)};
+    for (var areaKey in areaPolygons) {
+      if (Object.prototype.hasOwnProperty.call(areaPolygons, areaKey)) {
+        var polygonCoords = areaPolygons[areaKey];
+        L.polygon(polygonCoords, {
+          color: '#059669',
+          weight: 2,
+          opacity: 0.85,
+          fillColor: '#10B981',
+          fillOpacity: 0.16,
+          smoothFactor: 1.0
+        }).addTo(map);
+      }
+    }
 
     // Initial offset so coordinates align under the pin (at 35% height)
     map.whenReady(function() {

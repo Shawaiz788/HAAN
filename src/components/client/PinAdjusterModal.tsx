@@ -12,7 +12,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { validateCoordinatesServiceability } from '@/services/geofenceService';
+import { validateCoordinatesServiceability, AREA_POLYGONS } from '@/services/geofenceService';
 
 interface PinAdjusterModalProps {
   visible: boolean;
@@ -53,6 +53,22 @@ const getAdjusterLeafletHtml = (lat: number, lng: number) => `
       maxZoom: 20,
       subdomains: 'abcd'
     }).addTo(map);
+
+    // Render green area polygon highlights on map
+    var areaPolygons = ${JSON.stringify(AREA_POLYGONS)};
+    for (var areaKey in areaPolygons) {
+      if (Object.prototype.hasOwnProperty.call(areaPolygons, areaKey)) {
+        var polygonCoords = areaPolygons[areaKey];
+        L.polygon(polygonCoords, {
+          color: '#059669',
+          weight: 2,
+          opacity: 0.85,
+          fillColor: '#10B981',
+          fillOpacity: 0.16,
+          smoothFactor: 1.0
+        }).addTo(map);
+      }
+    }
 
     map.on('moveend', function() {
       var center = map.getCenter();
