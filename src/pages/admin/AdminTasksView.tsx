@@ -9,6 +9,7 @@ import {
   Alert,
   ToastAndroid,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -157,10 +158,14 @@ export default function AdminTasksView() {
         }
       >
         {loading && !refreshing ? (
-          <View style={{ gap: 10 }}>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <SkeletonCard key={i} />
-            ))}
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#0B5A3E" />
+            <Text style={styles.loadingText}>Fetching tasks...</Text>
+            <View style={{ gap: 10, width: '100%', marginTop: 12 }}>
+              {[1, 2, 3].map((i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </View>
           </View>
         ) : filteredTasks.length === 0 ? (
           <EmptyState
@@ -364,5 +369,16 @@ const styles = StyleSheet.create({
   deleteBtn: {
     padding: 6,
     marginLeft: 'auto',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
   },
 });
