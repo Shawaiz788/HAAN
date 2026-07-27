@@ -126,16 +126,29 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
   const [selectedProInfo, setSelectedProInfo] = useState<{ id: number; name: string } | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Periodic API status polling every 35s on active task
+  // Periodic API status polling on active task
   useEffect(() => {
     if (!taskId || !activeTask || activeTask.status === 'completed' || activeTask.status === 'cancelled') return;
 
-    console.log(`[ActiveTaskScreen] Starting periodic task completion check polling (35s) for Task ID: ${taskId}...`);
+    console.log(`[ActiveTaskScreen] Starting task status check for Task ID: ${taskId}...`);
 
+    let isMounted = true;
     const checkTaskStatus = async () => {
       try {
         const taskData = await getTaskByIdFromBackend(taskId);
-        if (taskData && (taskData.status_id === 4 || (taskData as any).status === 'completed')) {
+        if (!isMounted) return;
+
+        if (!taskData) {
+          console.log(`[ActiveTaskScreen] Task ${taskId} no longer exists on backend (deleted from another device).`);
+          Alert.alert(
+            'Task Removed',
+            'This task request has been deleted or removed from the system.',
+            [{ text: 'OK', onPress: () => cancelTask() }]
+          );
+          return;
+        }
+
+        if (taskData.status_id === 4 || (taskData as any).status === 'completed') {
           console.log(`[ActiveTaskScreen] Detected task ${taskId} completed on backend!`);
 
           const proName = activeTask.acceptedBid?.name || 'Service Provider';
@@ -144,17 +157,25 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
 
           setCompletedTaskInfo({ id: taskId, proName, proId, title: taskTitle });
           setReviewModalVisible(true);
+        } else if (taskData.status_id === 5 || taskData.status_id === 3) {
+          console.log(`[ActiveTaskScreen] Detected task ${taskId} cancelled on backend!`);
+          Alert.alert(
+            'Task Cancelled',
+            'This task request was cancelled.',
+            [{ text: 'OK', onPress: () => cancelTask() }]
+          );
         }
       } catch (err) {
         console.warn('[ActiveTaskScreen] Error polling task status:', err);
       }
     };
 
-    const initialTimer = setTimeout(checkTaskStatus, 10000);
-    const interval = setInterval(checkTaskStatus, 60000);
+    // Run check immediately on mount and then every 30s
+    checkTaskStatus();
+    const interval = setInterval(checkTaskStatus, 30000);
 
     return () => {
-      clearTimeout(initialTimer);
+      isMounted = false;
       clearInterval(interval);
     };
   }, [taskId, activeTask?.status]);

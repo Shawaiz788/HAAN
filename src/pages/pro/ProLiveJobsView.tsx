@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/auth';
 import { Colors } from '@/constants/colors';
-import { getWorkerTasksFromBackend } from '@/services/task';
+import { getWorkerTasksFromBackend, getTaskByIdFromBackend } from '@/services/task';
 import useProEarningsStore from '@/store/proEarningsStore';
 import { useProWebSocket, LiveJob } from '@/hooks/useProWebSocket';
 import { sendQuickBidViaWebSocket, useBiddingWebSocket } from '@/hooks/useBiddingWebSocket';
@@ -232,30 +232,66 @@ export default function ProLiveJobsView() {
         }
     }, [user?.id, fetchEarnings]);
 
-    // Sync active worker task from backend if not already set locally
+    // Sync active worker task from backend on load to verify MMKV state against backend
     useEffect(() => {
-        if (!user?.id || assignedJob) return;
+        if (!user?.id) return;
         getWorkerTasksFromBackend(user.id).then((tasks) => {
-            const activeBackendTask = tasks.find((t) => t.status_id !== 4 && t.status_id !== 5);
+            const activeBackendTask = Array.isArray(tasks) ? tasks.find((t) => t.status_id !== 4 && t.status_id !== 5 && t.status_id !== 3) : undefined;
             if (activeBackendTask) {
-                const restoredJob: LiveJob = {
-                    id: activeBackendTask.id!,
-                    title: activeBackendTask.subject || 'Active Task',
-                    description: activeBackendTask.body || '',
-                    category: 'Active Service',
-                    budget: activeBackendTask.price,
-                    location_name: 'Customer Location',
-                    customer_id: activeBackendTask.created_by,
-                    customer_name: (activeBackendTask as any).customer_name || 'Customer',
-                    created_at: activeBackendTask.created_at,
-                    payment_preference_id: activeBackendTask.payment_preference_id,
-                };
-                setAssignedJob(restoredJob);
+                const currentAssigned = useProTaskStore.getState().activeProTask;
+                if (!currentAssigned || Number(currentAssigned.id) !== Number(activeBackendTask.id)) {
+                    const restoredJob: LiveJob = {
+                        id: activeBackendTask.id!,
+                        title: activeBackendTask.subject || 'Active Task',
+                        description: activeBackendTask.body || '',
+                        category: 'Active Service',
+                        budget: activeBackendTask.price,
+                        location_name: 'Customer Location',
+                        customer_id: activeBackendTask.created_by,
+                        customer_name: (activeBackendTask as any).customer_name || 'Customer',
+                        created_at: activeBackendTask.created_at,
+                        payment_preference_id: activeBackendTask.payment_preference_id,
+                    };
+                    setAssignedJob(restoredJob);
+                }
+            } else {
+                // If backend has no active task for worker, clear stale MMKV assigned job!
+                const currentAssigned = useProTaskStore.getState().activeProTask;
+                if (currentAssigned) {
+                    console.log('[ProLiveJobsView] Backend has no active task for worker. Clearing stale MMKV assigned job.');
+                    setAssignedJob(null);
+                }
             }
         }).catch((err) => {
             console.warn('[ProLiveJobsView] Sync worker active task error:', err);
         });
-    }, [user?.id, assignedJob, setAssignedJob]);
+    }, [user?.id, setAssignedJob]);
+
+    // Verify active assigned job directly against backend endpoint periodically
+    useEffect(() => {
+        if (!assignedJob?.id) return;
+        let isMounted = true;
+        const verifyAssignedJob = async () => {
+            try {
+                const backendTask = await getTaskByIdFromBackend(Number(assignedJob.id));
+                if (!isMounted) return;
+                if (!backendTask || backendTask.status_id === 5 || backendTask.status_id === 3) {
+                    console.log(`[ProLiveJobsView] Assigned job ${assignedJob.id} no longer exists or was cancelled on backend. Clearing local MMKV.`);
+                    setAssignedJob(null);
+                    Alert.alert('Task Removed', 'This assigned task was deleted or cancelled.');
+                }
+            } catch (e) {
+                console.warn('[ProLiveJobsView] Error verifying assigned job:', e);
+            }
+        };
+
+        verifyAssignedJob();
+        const interval = setInterval(verifyAssignedJob, 30000);
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
+    }, [assignedJob?.id, setAssignedJob]);
 
     // Filter available live jobs to exclude assigned job
     const displayJobs: LiveJob[] = (wsJobs.length > 0)

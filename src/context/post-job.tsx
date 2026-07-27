@@ -5,6 +5,7 @@ import {
   createTaskChain,
   softDeleteTaskOnBackend,
   getUserTasksFromBackend,
+  getTaskByIdFromBackend,
 } from '@/services/task';
 import useTaskStore from '../store/taskStore';
 import { Bid, Task, ChatMessage } from '@/types';
@@ -98,6 +99,8 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
         const backendTasks = await getUserTasksFromBackend(userId);
         if (!isMounted) return;
 
+        const currentActive = useTaskStore.getState().activeTask;
+
         if (Array.isArray(backendTasks) && backendTasks.length > 0) {
           const mappedTasks: Task[] = backendTasks.map((bt) => {
             let status: Task['status'] = 'searching';
@@ -136,7 +139,6 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
             activeBackendTasks.sort((a, b) => (b.backend_id || 0) - (a.backend_id || 0));
             const latestActive = activeBackendTasks[0];
 
-            const currentActive = useTaskStore.getState().activeTask;
             if (!currentActive || currentActive.backend_id !== latestActive.backend_id || currentActive.status !== latestActive.status) {
               console.log(`[PostJobProvider] Linked active task from backend: ID ${latestActive.backend_id}`);
               setStoreActiveTask({
@@ -147,11 +149,27 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
             }
           } else {
             // No active task on backend - clear local active task if linked to backend
-            const currentActive = useTaskStore.getState().activeTask;
             if (currentActive && currentActive.backend_id) {
               console.log('[PostJobProvider] Clearing active task as backend reports no active tasks.');
               setStoreActiveTask(null);
             }
+          }
+        } else {
+          // Backend returned no tasks array or empty list - clear stale MMKV active task
+          if (currentActive && currentActive.backend_id) {
+            console.log('[PostJobProvider] Backend returned 0 tasks. Clearing stale MMKV active task.');
+            setStoreActiveTask(null);
+          }
+        }
+
+        // Additional explicit check: if currentActive exists with a backend_id, verify that specific task
+        const updatedCurrentActive = useTaskStore.getState().activeTask;
+        if (updatedCurrentActive && updatedCurrentActive.backend_id) {
+          const singleTask = await getTaskByIdFromBackend(updatedCurrentActive.backend_id);
+          if (!isMounted) return;
+          if (!singleTask || singleTask.status_id === 5 || singleTask.status_id === 3) {
+            console.log(`[PostJobProvider] Active task ${updatedCurrentActive.backend_id} is deleted/cancelled on backend. Clearing MMKV.`);
+            setStoreActiveTask(null);
           }
         }
       } catch (err) {
