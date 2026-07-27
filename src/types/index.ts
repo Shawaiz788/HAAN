@@ -96,6 +96,8 @@ export interface LiveJob {
   id: number;
   title: string;
   category: string;
+  subcategory?: string;
+  subcategory_id?: number;
   category_icon?: string;
   category_color?: string;
   budget: number;
@@ -171,7 +173,8 @@ export interface BackendTask {
   status_id: number;
   payment_preference_id: number;
   accurately_estimated: number;
-  category_id: number;
+  subcategory_id: number;
+  category_id?: number;
   _failedAttachmentCount?: number;
 }
 

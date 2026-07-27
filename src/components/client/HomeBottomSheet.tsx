@@ -46,6 +46,7 @@ interface HomeBottomSheetProps {
   openSearchModal: () => void;
   budget: string;
   setBudget: (val: string) => void;
+  minBasePrice?: number;
   loadingPaymentPrefs: boolean;
   paymentPreferences: any[];
   selectedPaymentPrefId: number | null;
@@ -86,6 +87,7 @@ export default function HomeBottomSheet({
   openSearchModal,
   budget,
   setBudget,
+  minBasePrice,
   loadingPaymentPrefs,
   paymentPreferences,
   selectedPaymentPrefId,
@@ -289,6 +291,21 @@ export default function HomeBottomSheet({
               )}
             </View>
           </View>
+
+          {/* Base Price Helper & Validation Hint */}
+          {minBasePrice && minBasePrice > 0 ? (
+            <View style={{ marginTop: 4, paddingHorizontal: 2 }}>
+              {budget !== '' && !isNaN(Number(budget)) && Number(budget) < minBasePrice ? (
+                <Text style={{ fontSize: 11, color: '#DC2626', fontWeight: '700' }}>
+                  ⚠️ Minimum required budget is Rs. {minBasePrice.toLocaleString()}
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 11, color: '#6B7280', fontWeight: '600' }}>
+                  Min base price: Rs. {minBasePrice.toLocaleString()}
+                </Text>
+              )}
+            </View>
+          ) : null}
 
           {/* Description Input */}
           <View style={styles.descriptionContainer}>

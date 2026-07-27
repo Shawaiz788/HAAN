@@ -201,8 +201,15 @@ export default function ProActiveTaskModal({
                         <Text style={styles.sectionHeading}>Task Overview</Text>
                         <View style={styles.jobHeader}>
                             <Text style={styles.jobTitle}>{job.title}</Text>
-                            <View style={styles.categoryBadge}>
-                                <Text style={styles.categoryBadgeText}>{job.category}</Text>
+                            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                                <View style={styles.categoryBadge}>
+                                    <Text style={styles.categoryBadgeText}>{job.category}</Text>
+                                </View>
+                                {Boolean(job.subcategory) && (
+                                    <View style={[styles.categoryBadge, { backgroundColor: '#ECFDF5' }]}>
+                                        <Text style={[styles.categoryBadgeText, { color: '#047857' }]}>{job.subcategory}</Text>
+                                    </View>
+                                )}
                             </View>
                         </View>
 

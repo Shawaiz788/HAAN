@@ -450,16 +450,41 @@ export default function HomeView({ userName }: HomeViewProps) {
       return;
     }
 
+    const getSubcategoriesByCategory = useCategoryStore.getState().getSubcategoriesByCategory;
+    const currentSubs = getSubcategoriesByCategory(selectedCategoryObj.id || selectedCategoryObj.name);
+
+    let selectedSubcategoryObj = currentSubs.find(s => s.name.toLowerCase() === activeSubcategory.toLowerCase());
+    if (!selectedSubcategoryObj && currentSubs.length > 0) {
+      selectedSubcategoryObj = currentSubs[0];
+    }
+
+    if (!selectedSubcategoryObj || !selectedSubcategoryObj.id) {
+      Alert.alert('Selection Required', 'Please select a specialty or subcategory.');
+      return;
+    }
+
     const selectedPrefObj = paymentPreferences.find(p => p.id === selectedPaymentPrefId);
     if (!selectedPrefObj) {
       Alert.alert('Payment Selection Required', 'Please select a payment preference.');
       return;
     }
 
-    if (!budget || isNaN(Number(budget)) || Number(budget) <= 0) {
+    const userBudget = Number(budget);
+    if (!budget || isNaN(userBudget) || userBudget <= 0) {
       Alert.alert('Invalid Budget', 'Please enter a valid price/budget.');
       return;
     }
+
+    const basePrice = Number(selectedSubcategoryObj.base_price ?? selectedSubcategoryObj.basePrice ?? 0);
+    if (basePrice > 0 && userBudget < basePrice) {
+      Alert.alert(
+        'Price Below Base Price',
+        `The budget for "${selectedSubcategoryObj.name}" cannot be lower than the base price of Rs. ${basePrice.toLocaleString()}.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     if (description.trim().length < 5) {
       Alert.alert('Details Required', 'Please describe the work in at least 5 characters.');
       return;
@@ -467,12 +492,13 @@ export default function HomeView({ userName }: HomeViewProps) {
 
     const attachmentUris = attachments.map(item => item.uri);
     createTask(
-      selectedCategoryObj.id,
+      selectedSubcategoryObj.id,
       selectedCategoryObj.name,
+      selectedSubcategoryObj.name,
       selectedPrefObj.id,
       selectedPrefObj.name,
       description,
-      Number(budget),
+      userBudget,
       address,
       attachmentUris
     );
@@ -481,6 +507,33 @@ export default function HomeView({ userName }: HomeViewProps) {
     setDescription('');
     setAttachments([]);
   };
+
+  const handleSelectSubcategory = (subName: string, subObj?: any) => {
+    setActiveSubcategory(subName);
+    let resolvedSub = subObj;
+
+    if (!resolvedSub && subName && activeCategory) {
+      const selectedCat = categories.find(c => c.name === activeCategory);
+      if (selectedCat) {
+        const getSubcategoriesByCategory = useCategoryStore.getState().getSubcategoriesByCategory;
+        const currentSubs = getSubcategoriesByCategory(selectedCat.id || selectedCat.name);
+        resolvedSub = currentSubs.find(s => s.name.toLowerCase() === subName.toLowerCase());
+      }
+    }
+
+    if (resolvedSub) {
+      const baseP = Number(resolvedSub.base_price ?? resolvedSub.basePrice ?? 0);
+      if (baseP > 0) {
+        setBudget(String(baseP));
+      }
+    }
+  };
+
+  const getSubcategoriesByCategory = useCategoryStore((state) => state.getSubcategoriesByCategory);
+  const activeCatObj = categories.find(c => c.name === activeCategory);
+  const activeSubs = activeCatObj ? getSubcategoriesByCategory(activeCatObj.id || activeCatObj.name) : [];
+  const activeSubObj = activeSubs.find(s => s.name.toLowerCase() === activeSubcategory.toLowerCase()) || (activeSubs.length > 0 ? activeSubs[0] : null);
+  const minBasePrice = Number(activeSubObj?.base_price ?? activeSubObj?.basePrice ?? 0);
 
   return (
     <View style={styles.container}>
@@ -513,9 +566,12 @@ export default function HomeView({ userName }: HomeViewProps) {
         shimmerAnim={shimmerAnim}
         categories={categories}
         activeCategory={activeCategory}
-        setActiveCategory={setActiveCategory}
+        setActiveCategory={(cat) => {
+          setActiveCategory(cat);
+          setActiveSubcategory('');
+        }}
         activeSubcategory={activeSubcategory}
-        setActiveSubcategory={setActiveSubcategory}
+        setActiveSubcategory={handleSelectSubcategory}
         locStreet={locStreet} setLocStreet={setLocStreet}
         locArea={locArea} setLocArea={setLocArea}
         locCity={locCity} setLocCity={setLocCity}
@@ -523,6 +579,7 @@ export default function HomeView({ userName }: HomeViewProps) {
         updateMapFromFields={updateMapFromFields}
         openSearchModal={openSearchModal}
         budget={budget} setBudget={setBudget}
+        minBasePrice={minBasePrice}
         loadingPaymentPrefs={loadingPaymentPrefs}
         paymentPreferences={paymentPreferences}
         selectedPaymentPrefId={selectedPaymentPrefId}

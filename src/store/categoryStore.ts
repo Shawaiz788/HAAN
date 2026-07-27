@@ -60,6 +60,12 @@ interface CategoryStoreState {
 
     /** Convenience: icon + color for a given category id or name. */
     getStyleById: (id: number) => { icon: string; color: string };
+
+    /** Look up category and subcategory by subcategory_id. */
+    getCategoryAndSubcategoryBySubId: (subId: number) => {
+        category: Category | undefined;
+        subcategory: SubCategory | undefined;
+    };
 }
 
 const useCategoryStore = create<CategoryStoreState>((set, get) => ({
@@ -143,48 +149,48 @@ const useCategoryStore = create<CategoryStoreState>((set, get) => ({
         // 2. Dynamic specialty fallbacks if backend subcategories are unassigned
         if (catName.includes('ac') || catName.includes('hvac') || catName.includes('cooling')) {
             return [
-                { id: 201, name: 'Cleaning', image: 'sparkles', color: '#3B82F6' },
-                { id: 202, name: 'Installation', image: 'build', color: '#3B82F6' },
-                { id: 203, name: 'Repair', image: 'construct', color: '#3B82F6' },
-                { id: 204, name: 'Gas Refill', image: 'snow', color: '#3B82F6' },
+                { id: 201, name: 'Cleaning', image: 'sparkles', color: '#3B82F6', base_price: 2000 },
+                { id: 202, name: 'Installation', image: 'build', color: '#3B82F6', base_price: 3500 },
+                { id: 203, name: 'Repair', image: 'construct', color: '#3B82F6', base_price: 2500 },
+                { id: 204, name: 'Gas Refill', image: 'snow', color: '#3B82F6', base_price: 3000 },
             ];
         }
         if (catName.includes('tutor') || catName.includes('tuition') || catName.includes('teacher')) {
             return [
-                { id: 101, name: 'Math', image: 'school', color: '#10B981' },
-                { id: 102, name: 'English', image: 'book', color: '#10B981' },
-                { id: 103, name: 'Physics', image: 'flask', color: '#10B981' },
-                { id: 104, name: 'Chemistry', image: 'analytics', color: '#10B981' },
+                { id: 101, name: 'Math', image: 'school', color: '#10B981', base_price: 1500 },
+                { id: 102, name: 'English', image: 'book', color: '#10B981', base_price: 1500 },
+                { id: 103, name: 'Physics', image: 'flask', color: '#10B981', base_price: 2000 },
+                { id: 104, name: 'Chemistry', image: 'analytics', color: '#10B981', base_price: 2000 },
             ];
         }
         if (catName.includes('electric') || catName.includes('wiring')) {
             return [
-                { id: 301, name: 'Wiring', image: 'flash', color: '#F97316' },
-                { id: 302, name: 'UPS & Inverter', image: 'hardware-chip', color: '#F97316' },
-                { id: 303, name: 'Appliance Repair', image: 'construct', color: '#F97316' },
-                { id: 304, name: 'Light & Fan Fitting', image: 'bulb', color: '#F97316' },
+                { id: 301, name: 'Wiring', image: 'flash', color: '#F97316', base_price: 2500 },
+                { id: 302, name: 'UPS & Inverter', image: 'hardware-chip', color: '#F97316', base_price: 2000 },
+                { id: 303, name: 'Appliance Repair', image: 'construct', color: '#F97316', base_price: 1500 },
+                { id: 304, name: 'Light & Fan Fitting', image: 'bulb', color: '#F97316', base_price: 1000 },
             ];
         }
         if (catName.includes('plumb') || catName.includes('pipe')) {
             return [
-                { id: 401, name: 'Leakage Fixing', image: 'water', color: '#A855F7' },
-                { id: 402, name: 'Tap Fitting', image: 'build', color: '#A855F7' },
-                { id: 403, name: 'Drainage Clear', image: 'construct', color: '#A855F7' },
-                { id: 404, name: 'Motor Installation', image: 'options', color: '#A855F7' },
+                { id: 401, name: 'Leakage Fixing', image: 'water', color: '#A855F7', base_price: 1500 },
+                { id: 402, name: 'Tap Fitting', image: 'build', color: '#A855F7', base_price: 1200 },
+                { id: 403, name: 'Drainage Clear', image: 'construct', color: '#A855F7', base_price: 1800 },
+                { id: 404, name: 'Motor Installation', image: 'options', color: '#A855F7', base_price: 2500 },
             ];
         }
         if (catName.includes('clean') || catName.includes('maid')) {
             return [
-                { id: 501, name: 'Deep Cleaning', image: 'sparkles', color: '#EAB308' },
-                { id: 502, name: 'Sofa & Carpet', image: 'home', color: '#EAB308' },
-                { id: 503, name: 'Water Tank', image: 'water', color: '#EAB308' },
+                { id: 501, name: 'Deep Cleaning', image: 'sparkles', color: '#EAB308', base_price: 3000 },
+                { id: 502, name: 'Sofa & Carpet', image: 'home', color: '#EAB308', base_price: 2000 },
+                { id: 503, name: 'Water Tank', image: 'water', color: '#EAB308', base_price: 2500 },
             ];
         }
         if (catName.includes('paint')) {
             return [
-                { id: 601, name: 'Wall Painting', image: 'brush', color: '#EC4899' },
-                { id: 602, name: 'Wood Polish', image: 'color-palette', color: '#EC4899' },
-                { id: 603, name: 'Waterproofing', image: 'shield', color: '#EC4899' },
+                { id: 601, name: 'Wall Painting', image: 'brush', color: '#EC4899', base_price: 5000 },
+                { id: 602, name: 'Wood Polish', image: 'color-palette', color: '#EC4899', base_price: 3000 },
+                { id: 603, name: 'Waterproofing', image: 'shield', color: '#EC4899', base_price: 6000 },
             ];
         }
 
@@ -194,6 +200,33 @@ const useCategoryStore = create<CategoryStoreState>((set, get) => ({
     getStyleById: (id) => {
         const cat = get().categories.find((c) => c.id === id);
         return getCategoryStyle(cat);
+    },
+
+    getCategoryAndSubcategoryBySubId: (subId) => {
+        const { categories, subcategories } = get();
+        const sub = subcategories.find((s: any) => Number(s.id) === Number(subId));
+
+        if (!sub) {
+            // Fallback: check if subId was directly a category id
+            const cat = categories.find((c) => Number(c.id) === Number(subId));
+            if (cat) {
+                return { category: cat, subcategory: undefined };
+            }
+            return { category: undefined, subcategory: undefined };
+        }
+
+        const catId =
+            sub.category_id !== undefined && sub.category_id !== null
+                ? sub.category_id
+                : typeof sub.category === 'object' && sub.category !== null
+                ? sub.category.id
+                : typeof sub.category === 'number'
+                ? sub.category
+                : null;
+
+        const cat = categories.find((c) => Number(c.id) === Number(catId));
+
+        return { category: cat, subcategory: sub };
     },
 }));
 

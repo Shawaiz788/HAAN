@@ -19,8 +19,9 @@ interface PostJobContextType {
   isCreatingTask: boolean;
   creationStep: string;
   createTask: (
-    categoryId: number,
+    subcategoryId: number,
     categoryName: string,
+    subcategoryName: string,
     paymentPreferenceId: number,
     paymentPreferenceName: string,
     description: string,
@@ -117,8 +118,9 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
   };
 
   const createTask = (
-    categoryId: number,
+    subcategoryId: number,
     categoryName: string,
+    subcategoryName: string,
     paymentPreferenceId: number,
     paymentPreferenceName: string,
     description: string,
@@ -131,9 +133,11 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    const categoryLabel = subcategoryName ? `${categoryName} (${subcategoryName})` : categoryName;
+
     const newTask: Task = {
       id: Date.now().toString(),
-      category: categoryName,
+      category: categoryLabel,
       description,
       budget,
       locationName,
@@ -157,8 +161,9 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
       (async () => {
         try {
           console.log('[PostJobProvider] Dispatching createTaskChain with:', {
-            categoryId,
+            subcategoryId,
             categoryName,
+            subcategoryName,
             paymentPreferenceId,
             budget,
             userId,
@@ -171,8 +176,9 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
           }
 
           const createdBackend = await createTaskChain({
-            categoryId,
+            subcategoryId,
             categoryName,
+            subcategoryName,
             paymentPreferenceId,
             description,
             budget,

@@ -23,7 +23,8 @@ type WSMessage =
             subject: string;
             body: string;
             price: number;
-            category_id: number;
+            subcategory_id?: number;
+            category_id?: number;
             location_id: number;
             payment_preference_id?: number;
             created_at?: string;
@@ -67,7 +68,7 @@ export function useProWebSocket({
     const [wsStatus, setWsStatus] = useState<WSStatus>('disconnected');
     const [hasNoJobs, setHasNoJobs] = useState(false);
 
-    const { ensureCategories, getCategoryById, getStyleById } = useCategoryStore();
+    const { ensureCategories, getCategoryById, getStyleById, getCategoryAndSubcategoryBySubId } = useCategoryStore();
 
     const onTaskCancelledForWorkerRef = useRef(onTaskCancelledForWorker);
     onTaskCancelledForWorkerRef.current = onTaskCancelledForWorker;
@@ -148,14 +149,17 @@ export function useProWebSocket({
 
                 if (msg.type === 'task_created' && msg.task) {
                     const t = msg.task;
-                    const cat = getCategoryById(t.category_id);
-                    const { icon: catIcon, color: catColor } = getStyleById(t.category_id);
+                    const subId = t.subcategory_id || t.category_id || 0;
+                    const { category: cat, subcategory: sub } = getCategoryAndSubcategoryBySubId(subId);
+                    const { icon: catIcon, color: catColor } = getStyleById(cat?.id || subId);
 
                     const newJob: LiveJob = {
                         id: t.id,
                         title: t.subject || 'New Task',
                         description: t.body || '',
-                        category: cat?.name ?? `Category ${t.category_id}`,
+                        category: cat?.name ?? (t.category_id ? `Category ${t.category_id}` : 'Service'),
+                        subcategory: sub?.name ?? '',
+                        subcategory_id: subId,
                         category_icon: catIcon,
                         category_color: catColor,
                         budget: t.price,
@@ -300,14 +304,17 @@ export function useProWebSocket({
             setHasNoJobs(false);
 
             const initialJobs: LiveJob[] = openTasks.map((t) => {
-                const cat = getCategoryById(t.category_id);
-                const { icon: catIcon, color: catColor } = getStyleById(t.category_id);
+                const subId = t.subcategory_id || (t as any).category_id || 0;
+                const { category: cat, subcategory: sub } = getCategoryAndSubcategoryBySubId(subId);
+                const { icon: catIcon, color: catColor } = getStyleById(cat?.id || subId);
 
                 return {
                     id: t.id!,
                     title: t.subject || 'New Task',
                     description: t.body || '',
-                    category: cat?.name ?? `Category ${t.category_id}`,
+                    category: cat?.name ?? ((t as any).category_id ? `Category ${(t as any).category_id}` : 'Service'),
+                    subcategory: sub?.name ?? '',
+                    subcategory_id: subId,
                     category_icon: catIcon,
                     category_color: catColor,
                     budget: t.price,

@@ -520,6 +520,16 @@ export default function JobDetailBottomSheet({
                             </View>
                             <View style={styles.jobHeaderText}>
                                 <Text style={styles.jobDetailTitle} numberOfLines={2}>{job?.title}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: categoryIcon.color }}>
+                                        {job?.category}
+                                    </Text>
+                                    {Boolean(job?.subcategory) && (
+                                        <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.neutral[600] }}>
+                                            • {job?.subcategory}
+                                        </Text>
+                                    )}
+                                </View>
                                 <View style={styles.jobMetaRow}>
                                     <View style={styles.dateBadge}>
                                         <Text style={styles.dateBadgeText}>Today</Text>

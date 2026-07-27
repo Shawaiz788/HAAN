@@ -161,6 +161,16 @@ export default function JobCard({ job, onPress, onQuickBid, activeBid, hasActive
                 </View>
                 <View style={styles.titleSection}>
                     <Text style={styles.jobTitle} numberOfLines={1}>{job.title}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginVertical: 2 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: categoryIcon.color }}>
+                            {job.category}
+                        </Text>
+                        {Boolean(job.subcategory) && (
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: Colors.neutral[300] }}>
+                                • {job.subcategory}
+                            </Text>
+                        )}
+                    </View>
                     <View style={styles.metaRow}>
                         {job.scheduled_date && (
                             <View style={styles.dateBadge}>

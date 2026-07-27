@@ -25,7 +25,7 @@ interface HomeCategoryListProps {
   activeCategory: string;
   setActiveCategory: (category: string) => void;
   activeSubcategory?: string;
-  setActiveSubcategory?: (subCategory: string) => void;
+  setActiveSubcategory?: (subCategory: string, subObject?: any) => void;
 }
 
 const getLightBg = (hex: string) => {
@@ -248,7 +248,7 @@ export default function HomeCategoryList({
                     if (isSubSelected) {
                       if (setActiveSubcategory) setActiveSubcategory('');
                     } else {
-                      if (setActiveSubcategory) setActiveSubcategory(sub.name);
+                      if (setActiveSubcategory) setActiveSubcategory(sub.name, sub);
                     }
                   }}
                 >

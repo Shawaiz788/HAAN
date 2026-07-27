@@ -10,8 +10,9 @@ export { Category, PaymentPreference, Status };
 export type Task = BackendTask;
 
 export interface TaskChainInput {
-  categoryId: number;
+  subcategoryId: number;
   categoryName: string;
+  subcategoryName?: string;
   paymentPreferenceId: number;
   description: string;
   budget: number;
@@ -152,11 +153,11 @@ export const createTask = async (task: Omit<Task, 'id'>): Promise<Task> => {
 // 4. Assemble inputs (subject, timestamps, location details)
 // 5. Send request to endpoint
 export const createTaskChain = async (input: TaskChainInput): Promise<Task> => {
-  const { categoryId, categoryName, paymentPreferenceId, description, budget, userId, locationId, attachmentUris } = input;
+  const { subcategoryId, categoryName, subcategoryName, paymentPreferenceId, description, budget, userId, locationId, attachmentUris } = input;
   console.log('[createTaskChain] Resolving task creation sequence with pre-resolved IDs...', input);
 
   // 1. Construct Subject line
-  const subject = `${categoryName} Service Needed`;
+  const subject = subcategoryName ? `${subcategoryName} (${categoryName})` : `${categoryName} Service Needed`;
 
   // 2. Construct timestamp
   const preferredTime = new Date().toISOString();
@@ -172,8 +173,7 @@ export const createTaskChain = async (input: TaskChainInput): Promise<Task> => {
     status_id: 1, // Default status id is 1
     payment_preference_id: paymentPreferenceId,
     accurately_estimated: 0, // Default accurately_estimated
-    category_id: categoryId,
-
+    subcategory_id: subcategoryId,
   };
 
   const createdTask = await createTask(taskPayload);
