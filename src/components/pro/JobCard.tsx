@@ -16,7 +16,7 @@ import { LiveJob } from '@/hooks/useProWebSocket';
 import { getCategoryStyle } from '@/store/categoryStore';
 import { ActiveBidState } from '@/hooks/useActiveBids';
 import UserReviewsModal from '@/components/UserReviewsModal';
-import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/utils/paymentCache';
+import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/store/paymentStore';
 
 const { width } = Dimensions.get('window');
 

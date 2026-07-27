@@ -13,33 +13,34 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppUser } from '@/types';
 import { getCustomerReviews } from '@/services/user';
 
+import { useAuth } from '@/context/auth';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+
 const { width } = Dimensions.get('window');
 
 interface DrawerPanelProps {
   open: boolean;
   onClose: () => void;
-  user: AppUser | null;
   activeTask: any;
   onOpenActiveRequest: () => void;
   onOpenHistory: () => void;
   onSignOut: () => void;
   drawerAnim: Animated.Value;
-  insets: { top: number; bottom: number };
-  router: any;
 }
 
 export default function DrawerPanel({
   open,
   onClose,
-  user,
   activeTask,
   onOpenActiveRequest,
   onOpenHistory,
   onSignOut,
   drawerAnim,
-  insets,
-  router,
 }: DrawerPanelProps) {
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [reviewCount, setReviewCount] = useState<number | null>(null);
 

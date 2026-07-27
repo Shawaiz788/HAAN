@@ -10,7 +10,7 @@ import { createProEarnings } from '@/services/proEarnings';
 type Role = 'client' | 'provider' | 'admin';
 
 interface UseProfileSubmitParams {
-  user: any;
+  user?: any;
   params: any;
   countryName: string | undefined;
   fullName: string;

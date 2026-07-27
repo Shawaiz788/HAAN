@@ -64,7 +64,7 @@ export default function HomeView({ userName }: HomeViewProps) {
     locStreet, setLocStreet, locArea, setLocArea, locCity, setLocCity,
     locSearchLoading, reverseGeocode, reCenterMap, searchLocations, openSearchModal,
     selectSearchResult, confirmAdjustedLocation, updateMapFromFields, handleMapMessage,
-  } = useHomeViewLocation({ user, webViewRef });
+  } = useHomeViewLocation({ webViewRef });
 
   // 3-state bottom sheet: 'collapsed', 'default', 'expanded'
   const [sheetState, setSheetState] = useState<'collapsed' | 'default' | 'expanded'>('default');
@@ -618,14 +618,11 @@ export default function HomeView({ userName }: HomeViewProps) {
       <DrawerPanel
         open={drawerOpen}
         onClose={() => toggleDrawer(false)}
-        user={user}
         activeTask={activeTask}
         onOpenActiveRequest={() => setViewActiveTaskScreen(true)}
         onOpenHistory={() => router.push('/task-history')}
         onSignOut={handleSignOut}
         drawerAnim={drawerAnim}
-        insets={insets}
-        router={router}
       />
 
       {/* Active Task Full Screen Overlay */}

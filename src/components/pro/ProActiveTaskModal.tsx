@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 import { LiveJob } from '@/hooks/useProWebSocket';
 import UserReviewsModal from '@/components/UserReviewsModal';
-import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/utils/paymentCache';
+import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/store/paymentStore';
 import { styles } from '@/styles/proActiveTaskModal.styles';
 
 interface ProActiveTaskModalProps {

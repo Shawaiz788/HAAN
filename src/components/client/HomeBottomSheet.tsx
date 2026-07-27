@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeCategoryList from './HomeCategoryList';
 import { styles } from '@/styles/homeView.styles';
-import { getPaymentPrefStyle } from '@/utils/paymentCache';
+import { getPaymentPrefStyle } from '@/store/paymentStore';
 
 export { getPaymentPrefStyle };
 

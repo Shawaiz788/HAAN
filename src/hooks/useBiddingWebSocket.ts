@@ -158,6 +158,9 @@ export async function sendQuickBidViaWebSocket(
 const MAX_RETRY_DELAY_MS = 30_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 
+import { useAuth } from '@/context/auth';
+import { USER_TYPE_CLIENT } from '@/constants/userTypes';
+
 function showFeedback(message: string) {
     if (Platform.OS === 'android') {
         ToastAndroid.show(message, ToastAndroid.LONG);
@@ -168,13 +171,16 @@ function showFeedback(message: string) {
 
 export function useBiddingWebSocket({
     taskId,
-    userId,
-    isCustomer = false,
+    userId: passedUserId,
+    isCustomer: passedIsCustomer,
     enabled = true,
     token,
     onBidAccepted,
     onTaskAssignedToOther,
 }: UseBiddingWebSocketOptions): UseBiddingWebSocketResult {
+    const { user } = useAuth();
+    const userId = passedUserId ?? user?.id;
+    const isCustomer = passedIsCustomer ?? (user?.usertype_id === USER_TYPE_CLIENT);
     const [bids, setBids] = useState<BidsWSBid[]>([]);
     const [isBiddingClosed, setIsBiddingClosed] = useState(false);
     const [winningBid, setWinningBid] = useState<BidsWSBid | null>(null);

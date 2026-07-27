@@ -43,8 +43,10 @@ type WSMessage =
 
 export type WSStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
 
+import { useAuth } from '@/context/auth';
+
 interface UseProWebSocketOptions {
-    userId: number | undefined;
+    userId?: number | undefined;
     isOnline: boolean;
     onTaskCancelledForWorker?: (taskId: number, workerId: number) => void;
 }
@@ -60,10 +62,12 @@ const MAX_RETRY_DELAY_MS = 30_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 
 export function useProWebSocket({
-    userId,
+    userId: passedUserId,
     isOnline,
     onTaskCancelledForWorker,
 }: UseProWebSocketOptions): UseProWebSocketResult {
+    const { user } = useAuth();
+    const userId = passedUserId ?? user?.id;
     const [jobs, setJobs] = useState<LiveJob[]>([]);
     const [wsStatus, setWsStatus] = useState<WSStatus>('disconnected');
     const [hasNoJobs, setHasNoJobs] = useState(false);

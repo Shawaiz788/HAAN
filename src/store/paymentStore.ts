@@ -11,22 +11,20 @@ export const getCachedPaymentPreferences = (): PaymentPreference[] => {
       return JSON.parse(raw);
     }
   } catch (e) {
-    console.error('[paymentCache] Error reading cached payment preferences:', e);
+    console.error('[paymentStore] Error reading cached payment preferences:', e);
   }
   return [];
 };
 
 export const syncPaymentPreferences = async (): Promise<PaymentPreference[]> => {
   try {
-    //console.log('[paymentCache] Fetching payment preferences from backend...');
     const data = await getPaymentPreferencesFromBackend();
     if (data && Array.isArray(data)) {
       storage.set('payment_preferences', JSON.stringify(data));
-      // console.log(`[paymentCache] Synced ${data.length} payment preferences.`);
       return data;
     }
   } catch (e) {
-    console.error('[paymentCache] Error syncing payment preferences from backend:', e);
+    console.error('[paymentStore] Error syncing payment preferences from backend:', e);
   }
   return getCachedPaymentPreferences();
 };

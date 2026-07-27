@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import getLeafletHtml from './leafletHtml';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 interface MapPickerModalProps {
   visible: boolean;
   onClose: () => void;
@@ -14,8 +16,8 @@ interface MapPickerModalProps {
   onMessage: (event: any) => void;
   onReCenter: () => void;
   onConfirm: () => void;
-  bottomInset: number;
-  topInset: number;
+  bottomInset?: number;
+  topInset?: number;
 }
 
 export default function MapPickerModal({
@@ -28,9 +30,12 @@ export default function MapPickerModal({
   onMessage,
   onReCenter,
   onConfirm,
-  bottomInset,
-  topInset,
+  bottomInset: passedBottomInset,
+  topInset: passedTopInset,
 }: MapPickerModalProps) {
+  const insets = useSafeAreaInsets();
+  const topInset = passedTopInset ?? insets.top;
+  const bottomInset = passedBottomInset ?? insets.bottom;
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.mapModalContainer}>

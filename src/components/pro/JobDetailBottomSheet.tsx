@@ -26,7 +26,7 @@ import { useAuth } from '@/context/auth';
 import { getCategoryStyle } from '@/store/categoryStore';
 import { getTaskAttachments } from '@/services/task';
 import UserReviewsModal from '@/components/UserReviewsModal';
-import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/utils/paymentCache';
+import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/store/paymentStore';
 import { styles } from '@/styles/jobDetailBottomSheet.styles';
 
 const { height: WINDOW_H } = Dimensions.get('window');

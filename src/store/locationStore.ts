@@ -28,7 +28,7 @@ export const getCachedLocation = (userId?: number | null): CachedLocation => {
       }
     }
   } catch (e) {
-    console.error('[locationCache] Error reading MMKV location:', e);
+    console.error('[locationStore] Error reading MMKV location:', e);
   }
   return DEFAULT_LOCATION;
 };
@@ -38,6 +38,6 @@ export const setCachedLocation = (location: CachedLocation, userId?: number | nu
   try {
     storage.set(key, JSON.stringify(location));
   } catch (e) {
-    console.error('[locationCache] Error saving MMKV location:', e);
+    console.error('[locationStore] Error saving MMKV location:', e);
   }
 };

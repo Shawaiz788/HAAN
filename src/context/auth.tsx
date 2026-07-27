@@ -4,7 +4,7 @@ import { AppUser, Task } from '@/types';
 import useTaskStore from '../store/taskStore';
 import { getUserTasksFromBackend } from '@/services/task';
 import { USER_TYPE_CLIENT } from '@/constants/userTypes';
-import { syncPaymentPreferences } from '@/utils/paymentCache';
+import { syncPaymentPreferences } from '@/store/paymentStore';
 
 interface AuthContextType {
     user: AppUser | null;

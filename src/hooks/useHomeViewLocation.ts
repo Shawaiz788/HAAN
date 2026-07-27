@@ -2,15 +2,17 @@ import { useState, useEffect, useRef } from 'react';
 import { Alert, Keyboard, Platform, ToastAndroid } from 'react-native';
 import * as Location from 'expo-location';
 import { getLocationById } from '@/services/location';
-import { getCachedLocation, setCachedLocation, CachedLocation } from '@/utils/locationCache';
+import { getCachedLocation, setCachedLocation, CachedLocation } from '@/store/locationStore';
 import { initializeGeofenceService, validateCoordinatesServiceability } from '@/services/geofenceService';
 
+import { useAuth } from '@/context/auth';
+
 interface UseHomeViewLocationProps {
-  user: any;
   webViewRef: React.RefObject<any>;
 }
 
-export function useHomeViewLocation({ user, webViewRef }: UseHomeViewLocationProps) {
+export function useHomeViewLocation({ webViewRef }: UseHomeViewLocationProps) {
+  const { user } = useAuth();
   const cached = getCachedLocation(user?.id);
 
   const [mapCoords, setMapCoords] = useState({
