@@ -1,0 +1,177 @@
+import { StyleSheet } from 'react-native';
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  tabsRow: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  tabChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  tabChipActive: {
+    backgroundColor: '#0B5A3E',
+    borderColor: '#0B5A3E',
+  },
+  tabChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  tabChipTextActive: {
+    color: '#FFFFFF',
+  },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 10,
+  },
+  addBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#0B5A3E',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+    marginTop: 12,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    gap: 10,
+  },
+  itemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  itemTextCol: {
+    flex: 1,
+  },
+  itemName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  itemMeta: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  actionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editBtn: {
+    padding: 6,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 8,
+  },
+  deleteBtn: {
+    padding: 6,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    gap: 14,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  modalInput: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    fontSize: 14,
+    color: '#111827',
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelText: {
+    color: '#4B5563',
+    fontWeight: '700',
+  },
+  saveBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: '#0B5A3E',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  cityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  cityChipActive: {
+    backgroundColor: '#0B5A3E',
+    borderColor: '#0B5A3E',
+  },
+  cityChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  cityChipTextActive: {
+    color: '#FFFFFF',
+  },
+});
