@@ -149,48 +149,89 @@ const useCategoryStore = create<CategoryStoreState>((set, get) => ({
         // 2. Dynamic specialty fallbacks if backend subcategories are unassigned
         if (catName.includes('ac') || catName.includes('hvac') || catName.includes('cooling')) {
             return [
-                { id: 201, name: 'Cleaning', image: 'sparkles', color: '#3B82F6', base_price: 2000 },
-                { id: 202, name: 'Installation', image: 'build', color: '#3B82F6', base_price: 3500 },
-                { id: 203, name: 'Repair', image: 'construct', color: '#3B82F6', base_price: 2500 },
-                { id: 204, name: 'Gas Refill', image: 'snow', color: '#3B82F6', base_price: 3000 },
+                { id: 201, name: 'General Wet Service', image: 'snow', color: '#3B82F6', base_price: 1500 },
+                { id: 202, name: 'Master Dismantle Wash', image: 'sparkles', color: '#3B82F6', base_price: 2500 },
+                { id: 203, name: 'Gas Refill (R22 / R410)', image: 'funnel', color: '#3B82F6', base_price: 3500 },
+                { id: 204, name: 'AC Installation', image: 'build', color: '#3B82F6', base_price: 3000 },
+                { id: 205, name: 'PCB Board & Repair', image: 'construct', color: '#3B82F6', base_price: 2000 },
             ];
         }
         if (catName.includes('tutor') || catName.includes('tuition') || catName.includes('teacher')) {
             return [
-                { id: 101, name: 'Math', image: 'school', color: '#10B981', base_price: 1500 },
-                { id: 102, name: 'English', image: 'book', color: '#10B981', base_price: 1500 },
-                { id: 103, name: 'Physics', image: 'flask', color: '#10B981', base_price: 2000 },
-                { id: 104, name: 'Chemistry', image: 'analytics', color: '#10B981', base_price: 2000 },
+                { id: 101, name: 'Primary School (Class 1-5)', image: 'school', color: '#10B981', base_price: 5000 },
+                { id: 102, name: 'Matric / O-Levels Science', image: 'flask', color: '#10B981', base_price: 8000 },
+                { id: 103, name: 'FSc / A-Levels Specialist', image: 'book', color: '#10B981', base_price: 12000 },
+                { id: 104, name: 'Quran & Tajweed Lessons', image: 'ribbon', color: '#10B981', base_price: 3000 },
             ];
         }
         if (catName.includes('electric') || catName.includes('wiring')) {
             return [
-                { id: 301, name: 'Wiring', image: 'flash', color: '#F97316', base_price: 2500 },
-                { id: 302, name: 'UPS & Inverter', image: 'hardware-chip', color: '#F97316', base_price: 2000 },
-                { id: 303, name: 'Appliance Repair', image: 'construct', color: '#F97316', base_price: 1500 },
-                { id: 304, name: 'Light & Fan Fitting', image: 'bulb', color: '#F97316', base_price: 1000 },
+                { id: 301, name: 'Switch & Socket Repair', image: 'flash', color: '#F97316', base_price: 500 },
+                { id: 302, name: 'Fan Fitting & Repair', image: 'options', color: '#F97316', base_price: 800 },
+                { id: 303, name: 'Light & Chandelier Fitting', image: 'bulb', color: '#F97316', base_price: 1000 },
+                { id: 304, name: 'UPS & Inverter Wiring', image: 'hardware-chip', color: '#F97316', base_price: 1500 },
+                { id: 305, name: 'Full Wiring Check / Repair', image: 'construct', color: '#F97316', base_price: 2000 },
             ];
         }
         if (catName.includes('plumb') || catName.includes('pipe')) {
             return [
-                { id: 401, name: 'Leakage Fixing', image: 'water', color: '#A855F7', base_price: 1500 },
-                { id: 402, name: 'Tap Fitting', image: 'build', color: '#A855F7', base_price: 1200 },
-                { id: 403, name: 'Drainage Clear', image: 'construct', color: '#A855F7', base_price: 1800 },
-                { id: 404, name: 'Motor Installation', image: 'options', color: '#A855F7', base_price: 2500 },
+                { id: 401, name: 'Tap & Mixer Repair', image: 'water', color: '#A855F7', base_price: 500 },
+                { id: 402, name: 'Drainage Unclogging', image: 'construct', color: '#A855F7', base_price: 1200 },
+                { id: 403, name: 'Water Tank Cleaning', image: 'sparkles', color: '#A855F7', base_price: 2500 },
+                { id: 404, name: 'Commode / WC Fitting', image: 'build', color: '#A855F7', base_price: 1800 },
+                { id: 405, name: 'Motor Pump Repair', image: 'hardware-chip', color: '#A855F7', base_price: 1000 },
+            ];
+        }
+        if (catName.includes('mehndi') || catName.includes('henna')) {
+            return [
+                { id: 701, name: 'Casual / Party Hands', image: 'leaf', color: '#84CC16', base_price: 1000 },
+                { id: 702, name: 'Semi-Bridal Mehndi', image: 'flower', color: '#84CC16', base_price: 4000 },
+                { id: 703, name: 'Full Bridal Henna', image: 'sparkles', color: '#84CC16', base_price: 8000 },
+                { id: 704, name: 'Kids Mehndi', image: 'heart', color: '#84CC16', base_price: 500 },
             ];
         }
         if (catName.includes('clean') || catName.includes('maid')) {
             return [
-                { id: 501, name: 'Deep Cleaning', image: 'sparkles', color: '#EAB308', base_price: 3000 },
-                { id: 502, name: 'Sofa & Carpet', image: 'home', color: '#EAB308', base_price: 2000 },
-                { id: 503, name: 'Water Tank', image: 'water', color: '#EAB308', base_price: 2500 },
+                { id: 501, name: 'Sofa & Carpet Wash', image: 'home', color: '#EAB308', base_price: 2000 },
+                { id: 502, name: 'Deep Kitchen Cleaning', image: 'restaurant', color: '#EAB308', base_price: 3000 },
+                { id: 503, name: 'Full House Deep Cleaning', image: 'sparkles', color: '#EAB308', base_price: 8000 },
+                { id: 504, name: 'Water Tank Sanitization', image: 'water', color: '#EAB308', base_price: 2500 },
             ];
         }
         if (catName.includes('paint')) {
             return [
-                { id: 601, name: 'Wall Painting', image: 'brush', color: '#EC4899', base_price: 5000 },
-                { id: 602, name: 'Wood Polish', image: 'color-palette', color: '#EC4899', base_price: 3000 },
-                { id: 603, name: 'Waterproofing', image: 'shield', color: '#EC4899', base_price: 6000 },
+                { id: 601, name: 'Single Room Painting', image: 'brush', color: '#EC4899', base_price: 4000 },
+                { id: 602, name: 'Feature Wall Texture', image: 'color-palette', color: '#EC4899', base_price: 3500 },
+                { id: 603, name: 'Door & Window Polish', image: 'build', color: '#EC4899', base_price: 1500 },
+                { id: 604, name: 'Waterproofing Treatment', image: 'shield', color: '#EC4899', base_price: 3000 },
+            ];
+        }
+        if (catName.includes('mason') || catName.includes('labor') || catName.includes('construction')) {
+            return [
+                { id: 801, name: 'Tile & Marble Fitting', image: 'grid', color: '#F43F5E', base_price: 2000 },
+                { id: 802, name: 'Wall Plaster & Patchwork', image: 'hammer', color: '#F43F5E', base_price: 1500 },
+                { id: 803, name: 'Brickwork & Masonry', image: 'construct', color: '#F43F5E', base_price: 2500 },
+            ];
+        }
+        if (catName.includes('cook') || catName.includes('chef')) {
+            return [
+                { id: 901, name: 'Daily Household Meal Cook', image: 'restaurant', color: '#F97316', base_price: 8000 },
+                { id: 902, name: 'One-Time Party / Event Cook', image: 'flame', color: '#F97316', base_price: 3500 },
+                { id: 903, name: 'Special Daawat / Deg Cook', image: 'cafe', color: '#F97316', base_price: 5000 },
+            ];
+        }
+        if (catName.includes('driver')) {
+            return [
+                { id: 1001, name: 'Outstation / Inter-city Trip', image: 'car', color: '#06B6D4', base_price: 2500 },
+                { id: 1002, name: 'Short City Trip (3 hrs)', image: 'time', color: '#06B6D4', base_price: 800 },
+                { id: 1003, name: 'Monthly Full-time Driver', image: 'calendar', color: '#06B6D4', base_price: 25000 },
+            ];
+        }
+        if (catName.includes('other') || catName.includes('general')) {
+            return [
+                { id: 1101, name: 'General Handyman', image: 'construct', color: '#64748B', base_price: 500 },
+                { id: 1102, name: 'Furniture Repair & Fitting', image: 'hammer', color: '#64748B', base_price: 1000 },
+                { id: 1103, name: 'Appliance Repair', image: 'cog', color: '#64748B', base_price: 1200 },
             ];
         }
 
