@@ -8,6 +8,7 @@ import {
   PanResponder,
   Keyboard,
   Platform,
+  ToastAndroid,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -18,6 +19,7 @@ import { getPaymentPreferencesFromBackend, PaymentPreference } from '@/services/
 import useCategoryStore from '@/store/categoryStore';
 import { getLocationById } from '@/services/location';
 import { getCustomerReviews } from '@/services/user';
+import { initializeGeofenceService } from '@/services/geofenceService';
 import { useAuth } from '@/context/auth';
 import { usePostJob } from '@/context/post-job';
 import ActiveTaskScreen from '@/pages/client/ActiveTaskScreen';
@@ -56,6 +58,7 @@ export default function HomeView({ userName }: HomeViewProps) {
   const {
     mapCoords, setMapCoords, initialCoords, setInitialCoords,
     loadingLocation, setLoadingLocation, isGeocoding, address, setAddress,
+    isLocationAvailable, unavailabilityReason,
     searchModalVisible, setSearchModalVisible, pinAdjusterVisible, setPinAdjusterVisible,
     searchQuery, searchResults, searchingLocation,
     locStreet, setLocStreet, locArea, setLocArea, locCity, setLocCity,
@@ -241,9 +244,10 @@ export default function HomeView({ userName }: HomeViewProps) {
     const bootstrapHomeData = async () => {
       setLoadingPaymentPrefs(true);
 
-      const [catResult, paymentResult] = await Promise.allSettled([
+      const [catResult, paymentResult, geofenceResult] = await Promise.allSettled([
         ensureCategories(),
         getPaymentPreferencesFromBackend(),
+        initializeGeofenceService(),
       ]);
 
       if (!isMounted) return;
@@ -432,6 +436,20 @@ export default function HomeView({ userName }: HomeViewProps) {
   };
 
   const handleRequestTask = () => {
+    if (isLocationAvailable === false) {
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Services unavailable in selected location. Please adjust your pin.', ToastAndroid.LONG);
+      }
+      setTimeout(() => {
+        Alert.alert(
+          'Location Unavailable',
+          'Services are currently not available in your selected location. Please move your pin to a supported city/area.',
+          [{ text: 'Adjust Location', onPress: () => setPinAdjusterVisible(true) }]
+        );
+      }, 100);
+      return;
+    }
+
     if (activeTask && (activeTask.status === 'searching' || activeTask.status === 'bidding' || activeTask.status === 'accepted')) {
       Alert.alert(
         'Active Request in Progress',
@@ -541,6 +559,7 @@ export default function HomeView({ userName }: HomeViewProps) {
         loadingLocation={loadingLocation}
         isGeocoding={isGeocoding}
         isLocationSyncing={isLocationSyncing}
+        isLocationAvailable={isLocationAvailable}
         initialCoords={initialCoords}
         webViewRef={webViewRef}
         handleMapMessage={handleMapMessage}
@@ -560,6 +579,7 @@ export default function HomeView({ userName }: HomeViewProps) {
         panResponder={panResponder}
         sheetState={sheetState}
         address={address}
+        isLocationAvailable={isLocationAvailable}
         showAllCategories={showAllCategories}
         setShowAllCategories={setShowAllCategories}
         loadingCategories={loadingCategories}

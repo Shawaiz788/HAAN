@@ -26,6 +26,7 @@ interface HomeBottomSheetProps {
   panResponder: any;
   sheetState: 'collapsed' | 'default' | 'expanded';
   address: string;
+  isLocationAvailable?: boolean;
   showAllCategories: boolean;
   setShowAllCategories: (show: boolean) => void;
   loadingCategories: boolean;
@@ -67,6 +68,7 @@ export default function HomeBottomSheet({
   panResponder,
   sheetState,
   address,
+  isLocationAvailable = true,
   showAllCategories,
   setShowAllCategories,
   loadingCategories,
@@ -240,12 +242,23 @@ export default function HomeBottomSheet({
               </View>
             </View>
           ) : (
-            <Pressable style={styles.addressPill} onPress={openSearchModal}>
-              <Ionicons name="location" size={18} color="#EF4444" style={{ marginRight: 8 }} />
-              <Text style={styles.addressText} numberOfLines={1}>
-                {address}
-              </Text>
-            </Pressable>
+            <>
+              <Pressable style={[styles.addressPill, !isLocationAvailable && { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]} onPress={openSearchModal}>
+                <Ionicons name="location" size={18} color={isLocationAvailable ? "#EF4444" : "#DC2626"} style={{ marginRight: 8 }} />
+                <Text style={[styles.addressText, !isLocationAvailable && { color: '#991B1B' }]} numberOfLines={1}>
+                  {address}
+                </Text>
+              </Pressable>
+
+              {!isLocationAvailable && (
+                <View style={styles.unavailabilityBanner}>
+                  <Ionicons name="alert-circle" size={14} color="#DC2626" style={{ marginRight: 6 }} />
+                  <Text style={styles.unavailabilityText}>
+                    Services are not available in this area. Move map pin to a covered city.
+                  </Text>
+                </View>
+              )}
+            </>
           )}
 
           {/* Budget Input & Payment selection in a Row */}

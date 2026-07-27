@@ -71,6 +71,7 @@ interface HomeMapViewProps {
   loadingLocation: boolean;
   isGeocoding?: boolean;
   isLocationSyncing?: boolean;
+  isLocationAvailable?: boolean;
   initialCoords: { latitude: number; longitude: number } | null;
   webViewRef: React.RefObject<any>;
   handleMapMessage: (event: any) => void;
@@ -89,6 +90,7 @@ export default function HomeMapView({
   loadingLocation,
   isGeocoding,
   isLocationSyncing,
+  isLocationAvailable = true,
   initialCoords,
   webViewRef,
   handleMapMessage,
@@ -119,6 +121,18 @@ export default function HomeMapView({
 
         {/* 2. MAP OVERLAY PIN IN MIDDLE */}
         <View style={styles.centerMarkerContainer} pointerEvents="none">
+          {!isLocationAvailable && !(isLocationSyncing || isGeocoding) && (
+            <View style={[styles.pinPill, styles.pinPillUnavailable]}>
+              <Ionicons
+                name="warning"
+                size={12}
+                color="#FFFFFF"
+                style={{ marginRight: 4 }}
+              />
+              <Text style={styles.pinPillText}>Services Not Available</Text>
+            </View>
+          )}
+
           {(isLocationSyncing || isGeocoding) && (
             <View style={styles.pinLoadingBadge}>
               <ActivityIndicator size="small" color="#10B981" />

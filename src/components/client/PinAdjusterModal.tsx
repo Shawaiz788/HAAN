@@ -5,10 +5,14 @@ import {
   View,
   Pressable,
   Modal,
+  Alert,
+  Platform,
+  ToastAndroid,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { validateLocationServiceability } from '@/services/geofenceService';
 
 interface PinAdjusterModalProps {
   visible: boolean;
@@ -75,6 +79,7 @@ export default function PinAdjusterModal({
 }: PinAdjusterModalProps) {
   const [adjusterCoords, setAdjusterCoords] = useState(initialCoords);
   const [adjusterAddress, setAdjusterAddress] = useState(initialAddress);
+  const [isAvailable, setIsAvailable] = useState(true);
   const adjusterWebViewRef = useRef<WebView>(null);
 
   // Sync internal state when modal opens
@@ -82,6 +87,7 @@ export default function PinAdjusterModal({
     if (visible) {
       setAdjusterCoords(initialCoords);
       setAdjusterAddress(initialAddress);
+      reverseGeocodeAdjuster(initialCoords.latitude, initialCoords.longitude);
     }
   }, [visible, initialCoords, initialAddress]);
 
@@ -146,13 +152,38 @@ export default function PinAdjusterModal({
           item.district || item.subregion,
           item.city,
         ].filter(Boolean);
-        setAdjusterAddress(parts.join(', ') || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        const resolvedAddr = parts.join(', ') || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        const cityVal = item.city || '';
+        const areaVal = item.district || item.subregion || '';
+        setAdjusterAddress(resolvedAddr);
+
+        const res = validateLocationServiceability(cityVal, areaVal, resolvedAddr);
+        setIsAvailable(res.isAvailable);
       } else {
         setAdjusterAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        setIsAvailable(false);
       }
     } catch (e) {
       setAdjusterAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      setIsAvailable(true);
     }
+  };
+
+  const handleDone = () => {
+    if (!isAvailable) {
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Services not available in this location. Move pin to a covered city.', ToastAndroid.LONG);
+      } else {
+        setTimeout(() => {
+          Alert.alert(
+            'Location Unavailable',
+            'We do not offer services in this location yet. Please move the pin to a supported city/area.'
+          );
+        }, 100);
+      }
+      return;
+    }
+    onConfirm(adjusterCoords, adjusterAddress);
   };
 
   return (
@@ -174,6 +205,17 @@ export default function PinAdjusterModal({
 
         {/* Centered marker overlay */}
         <View style={styles.adjusterPinContainer} pointerEvents="none">
+          {!isAvailable && (
+            <View style={[styles.pinPill, styles.pinPillUnavailable]}>
+              <Ionicons
+                name="warning"
+                size={12}
+                color="#FFFFFF"
+                style={{ marginRight: 4 }}
+              />
+              <Text style={styles.pinPillText}>Services Not Available</Text>
+            </View>
+          )}
           <Ionicons name="location" size={44} color="#EF4444" style={styles.pinIcon} />
         </View>
 
@@ -203,9 +245,18 @@ export default function PinAdjusterModal({
             </Text>
           </View>
 
+          {!isAvailable && (
+            <View style={styles.unavailabilityBanner}>
+              <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 6 }} />
+              <Text style={styles.unavailabilityText}>
+                Services are not available in this area. Move pin to a covered city.
+              </Text>
+            </View>
+          )}
+
           <Pressable
-            style={styles.adjusterDoneBtn}
-            onPress={() => onConfirm(adjusterCoords, adjusterAddress)}
+            style={[styles.adjusterDoneBtn, !isAvailable && styles.adjusterDoneBtnDisabled]}
+            onPress={handleDone}
           >
             <Text style={styles.adjusterDoneBtnText}>Done</Text>
           </Pressable>
@@ -227,15 +278,63 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: '50%',
     top: '50%',
-    marginLeft: -22,
-    marginTop: -44,
+    marginLeft: -75,
+    marginTop: -44, // Exact 44px pin height so bottom tip sits precisely at map center point
+    width: 150,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     zIndex: 3,
+  },
+  pinPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  pinPillAvailable: {
+    backgroundColor: '#059669',
+  },
+  pinPillUnavailable: {
+    backgroundColor: '#DC2626',
+  },
+  pinPillText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   pinIcon: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
+  },
+  unavailabilityBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  unavailabilityText: {
+    color: '#991B1B',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  adjusterDoneBtnDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.7,
   },
   adjusterHeader: {
     position: 'absolute',

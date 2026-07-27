@@ -32,11 +32,36 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     left: '50%',
     top: '35%', // Positioned exactly in the center of the open map area (above bottom sheet)
-    marginLeft: -20,
-    marginTop: -40,
+    marginLeft: -75,
+    marginTop: -40, // Height of pin icon so bottom tip lands exactly at map center point
+    width: 150,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     zIndex: 2,
+  },
+  pinPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    marginBottom: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  pinPillAvailable: {
+    backgroundColor: '#059669',
+  },
+  pinPillUnavailable: {
+    backgroundColor: '#DC2626',
+  },
+  pinPillText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   pinIcon: {
     shadowColor: '#000',
@@ -735,5 +760,23 @@ export const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  unavailabilityBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  unavailabilityText: {
+    color: '#991B1B',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
   },
 });

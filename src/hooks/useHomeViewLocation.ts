@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Alert, Keyboard } from 'react-native';
+import { Alert, Keyboard, Platform, ToastAndroid } from 'react-native';
 import * as Location from 'expo-location';
 import { getLocationById } from '@/services/location';
 import { getCachedLocation, setCachedLocation, CachedLocation } from '@/utils/locationCache';
+import { initializeGeofenceService, validateLocationServiceability } from '@/services/geofenceService';
 
 interface UseHomeViewLocationProps {
   user: any;
@@ -23,6 +24,12 @@ export function useHomeViewLocation({ user, webViewRef }: UseHomeViewLocationPro
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [address, setAddress] = useState(cached.address || 'Lahore, Pakistan');
+  const [isLocationAvailable, setIsLocationAvailable] = useState(true);
+  const [unavailabilityReason, setUnavailabilityReason] = useState('');
+
+  useEffect(() => {
+    initializeGeofenceService();
+  }, []);
 
   // Search & Adjust Location States
   const [searchModalVisible, setSearchModalVisible] = useState(false);
@@ -58,6 +65,11 @@ export function useHomeViewLocation({ user, webViewRef }: UseHomeViewLocationPro
         setLocArea(areaVal);
         setLocCity(cityVal);
 
+        // Geofence Validation
+        const result = validateLocationServiceability(cityVal, areaVal, resolvedAddress);
+        setIsLocationAvailable(result.isAvailable);
+        setUnavailabilityReason(result.message);
+
         // Persist to MMKV
         setCachedLocation({
           latitude: lat,
@@ -70,11 +82,14 @@ export function useHomeViewLocation({ user, webViewRef }: UseHomeViewLocationPro
       } else {
         const fallbackAddr = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
         setAddress(fallbackAddr);
+        setIsLocationAvailable(false);
+        setUnavailabilityReason('Services Not Available Here');
         setCachedLocation({ latitude: lat, longitude: lng, address: fallbackAddr }, user?.id);
       }
     } catch (e) {
       const fallbackAddr = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       setAddress(fallbackAddr);
+      setIsLocationAvailable(true);
       setCachedLocation({ latitude: lat, longitude: lng, address: fallbackAddr }, user?.id);
     }
   };
@@ -378,6 +393,9 @@ export function useHomeViewLocation({ user, webViewRef }: UseHomeViewLocationPro
     setLocArea,
     locCity,
     setLocCity,
+    isLocationAvailable,
+    setIsLocationAvailable,
+    unavailabilityReason,
     locSearchLoading,
     reverseGeocode,
     reCenterMap,
