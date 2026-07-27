@@ -82,7 +82,7 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
   const chatGreetingTimer = useRef<NodeJS.Timeout | null>(null);
   const chatReplyTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Handle user account switching (loads from MMKV cache instantly without API calls)
+  // Handle user account switching (loads from MMKV cache instantly) & sync active task from backend
   useEffect(() => {
     const userId = user?.id;
     if (!userId) {
@@ -90,6 +90,78 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     switchUser(userId);
+
+    let isMounted = true;
+    (async () => {
+      try {
+        console.log(`[PostJobProvider] Syncing customer tasks from backend (/app/task/customer/${userId}/)...`);
+        const backendTasks = await getUserTasksFromBackend(userId);
+        if (!isMounted) return;
+
+        if (Array.isArray(backendTasks) && backendTasks.length > 0) {
+          const mappedTasks: Task[] = backendTasks.map((bt) => {
+            let status: Task['status'] = 'searching';
+            if (bt.status_id === 4) {
+              status = 'completed';
+            } else if (bt.status_id === 5 || bt.status_id === 3) {
+              status = 'cancelled';
+            } else if (bt.status_id === 2) {
+              status = 'accepted';
+            } else {
+              status = 'bidding';
+            }
+
+            return {
+              id: bt.id ? bt.id.toString() : Date.now().toString(),
+              backend_id: bt.id,
+              category: bt.subject || 'General Task',
+              description: bt.body || '',
+              budget: bt.price || 0,
+              locationName: 'Specified Location',
+              paymentPref: 'Cash',
+              status,
+              createdAt: bt.created_at || new Date().toISOString(),
+            };
+          });
+
+          setTaskHistory(mappedTasks);
+
+          // Find active tasks (status is searching, bidding, or accepted)
+          const activeBackendTasks = mappedTasks.filter(
+            (t) => t.status === 'searching' || t.status === 'bidding' || t.status === 'accepted'
+          );
+
+          if (activeBackendTasks.length > 0) {
+            // Sort by backend_id descending to select the latest active task
+            activeBackendTasks.sort((a, b) => (b.backend_id || 0) - (a.backend_id || 0));
+            const latestActive = activeBackendTasks[0];
+
+            const currentActive = useTaskStore.getState().activeTask;
+            if (!currentActive || currentActive.backend_id !== latestActive.backend_id || currentActive.status !== latestActive.status) {
+              console.log(`[PostJobProvider] Linked active task from backend: ID ${latestActive.backend_id}`);
+              setStoreActiveTask({
+                ...latestActive,
+                ...(currentActive && currentActive.backend_id === latestActive.backend_id ? currentActive : {}),
+                status: latestActive.status,
+              });
+            }
+          } else {
+            // No active task on backend - clear local active task if linked to backend
+            const currentActive = useTaskStore.getState().activeTask;
+            if (currentActive && currentActive.backend_id) {
+              console.log('[PostJobProvider] Clearing active task as backend reports no active tasks.');
+              setStoreActiveTask(null);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[PostJobProvider] Sync customer tasks API call failed:', err);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
   }, [user?.id]);
 
   // Clean up timers on unmount
