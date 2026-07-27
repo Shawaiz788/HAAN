@@ -53,6 +53,7 @@ export default function HomeCategoryList({
 }: HomeCategoryListProps) {
   const getSubcategoriesByCategory = useCategoryStore((state) => state.getSubcategoriesByCategory);
   const subAnim = useRef(new Animated.Value(0)).current;
+  const subScrollViewRef = useRef<ScrollView>(null);
 
   // Resolve the active main category object
   const activeCategoryObj = categories.find(
@@ -64,8 +65,11 @@ export default function HomeCategoryList({
     ? getSubcategoriesByCategory(activeCategoryObj?.id || activeCategoryObj?.name || activeCategory)
     : [];
 
-  // Animate subcategories row when active category or subcategories list changes
+  // Reset scroll position to top/start and animate subcategories row when active category changes
   useEffect(() => {
+    if (activeCategory) {
+      subScrollViewRef.current?.scrollTo({ x: 0, animated: false });
+    }
     if (activeCategory && currentSubcategories.length > 0) {
       subAnim.setValue(0);
       Animated.timing(subAnim, {
@@ -225,6 +229,8 @@ export default function HomeCategoryList({
         >
           <Text style={styles.subCategoryLabel}>Select Specialty / Subcategory</Text>
           <ScrollView
+            key={`sub-scroll-${activeCategory}`}
+            ref={subScrollViewRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.subCategoryScroll}
