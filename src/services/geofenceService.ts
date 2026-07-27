@@ -3,52 +3,57 @@ import { getAreas, Area } from './area';
 
 export interface ServiceabilityResult {
   isAvailable: boolean;
+  matchedAreaName?: string;
+  matchedAreaObj?: Area;
   matchedCityName?: string;
   matchedCityObj?: City;
   message: string;
 }
 
 /**
- * Real-world geographic boundary polygons for supported cities.
- * Each polygon is an array of [latitude, longitude] vertices tracing official city borders.
- * Easily extensible via API when backend sends custom city boundary coordinates.
+ * Real-world geographic boundary polygons for supported areas.
+ * Each polygon is an array of [latitude, longitude] vertices tracing area borders.
+ * Easily extensible via API when backend sends custom area boundary coordinates.
  */
-export const CITY_POLYGONS: Record<string, Array<[number, number]>> = {
-  // Real-world boundary polygon tracing Islamabad Capital Territory (ICT)
-  islamabad: [
-    [33.7850, 73.0800], // Margalla Hills North
-    [33.7750, 73.1800], // East Margalla / Quaid-i-Azam Uni
-    [33.7200, 73.2500], // Bhara Kahu / Simly Dam Rd
-    [33.6500, 73.2200], // Zone 4 / Lehtrar Rd
-    [33.5500, 73.1800], // Zone 5 / Kahuta / Sihala
-    [33.4800, 73.1000], // Rawat / GT Road South
-    [33.5200, 72.9500], // Tarnol / Motorway Interchange West
-    [33.6000, 72.8500], // New Islamabad Airport Area
-    [33.7000, 72.9000], // B-17 / D-12 West
-    [33.7600, 72.9800], // Margalla Ridge West
+export const AREA_POLYGONS: Record<string, Array<[number, number]>> = {
+  // Hardcoded boundary polygon tracing Bahria Town (Lahore)
+  bahriatown: [
+    [31.3880, 74.1680], // North West (Canal Road / Sector F)
+    [31.3820, 74.1960], // North East (Canal Bank Rd / Sector A)
+    [31.3580, 74.2000], // East (Sector E / Sector D boundary)
+    [31.3340, 74.1860], // South (Sector F / Golf Course)
+    [31.3380, 74.1540], // South West (Sector F West)
+    [31.3650, 74.1500], // West (Outer Perimeter)
   ],
 
-  // Real-world boundary polygon tracing Lahore District
-  lahore: [
-    [31.6400, 74.2800], // Shahdara / Ravi River North
-    [31.6200, 74.4200], // Wagha / BRB Canal East
-    [31.5200, 74.5200], // Bedian Road / Airport East
-    [31.3800, 74.4500], // Sue-e-Asal / Ferozepur Road South
-    [31.3200, 74.2500], // Raiwind / Bahria Town South
-    [31.4000, 74.1200], // Sundar Industrial / Multan Road West
-    [31.5200, 74.1500], // Thokar Niaz Baig / Motorway West
-    [31.6000, 74.2000], // Sagian / Ravi Bridge West
+  // Hardcoded boundary polygon tracing Model Town (Lahore)
+  modeltown: [
+    [31.5000, 74.3280], // North (Kalma Chowk / Garden Town border)
+    [31.4960, 74.3420], // North East (Ferozepur Road)
+    [31.4780, 74.3400], // East (Ferozepur Road / Block C & D)
+    [31.4650, 74.3350], // South East (Model Town Link Road Junction)
+    [31.4640, 74.3200], // South (Model Town Link Road / Township border)
+    [31.4720, 74.3080], // South West (Maulana Shaukat Ali Road)
+    [31.4880, 74.3120], // West (Maulana Shaukat Ali Road / Faisal Town)
+    [31.4980, 74.3180], // North West (Garden Town border)
   ],
 };
 
-// Default supported cities baseline
+// Export CITY_POLYGONS as alias for backwards compatibility
+export const CITY_POLYGONS = AREA_POLYGONS;
+
+// Default supported areas baseline
+const DEFAULT_AREAS: Area[] = [
+  { id: 1, name: 'Bahria Town' },
+  { id: 2, name: 'Model Town' },
+];
+
 const DEFAULT_CITIES: City[] = [
   { id: 1, name: 'Lahore' },
-  { id: 2, name: 'Islamabad' },
 ];
 
 let cachedCities: City[] = [...DEFAULT_CITIES];
-let cachedAreas: Area[] = [];
+let cachedAreas: Area[] = [...DEFAULT_AREAS];
 
 function normalize(str: string): string {
   if (!str) return '';
@@ -91,10 +96,10 @@ export const initializeGeofenceService = async (): Promise<void> => {
       cachedCities = cities;
     }
     if (areas && areas.length > 0) {
-      cachedAreas = areas;
+      cachedAreas = [...DEFAULT_AREAS, ...areas];
     }
   } catch (error) {
-    console.log('[geofenceService] Initialized with baseline supported cities.');
+    console.log('[geofenceService] Initialized with baseline supported areas.');
   }
 };
 
@@ -104,7 +109,7 @@ export const getCachedCitiesAndAreas = () => {
 
 /**
  * Primary Geofence Validation:
- * Checks if lat/lng coordinates fall inside active city polygon boundaries.
+ * Checks if lat/lng coordinates fall inside active area polygon boundaries.
  */
 export const validateCoordinatesServiceability = (
   lat: number,
@@ -114,30 +119,40 @@ export const validateCoordinatesServiceability = (
     return { isAvailable: false, message: 'Services Not Available in this location' };
   }
 
-  // 1. Check active backend cached cities first
-  for (const city of cachedCities) {
-    const cityKey = normalize(city.name);
-    // API Readiness: Use city's custom boundary polygon from API if provided in future
-    const polygon = (city as any).boundary_polygon || CITY_POLYGONS[cityKey];
+  // 1. Check active backend cached areas first
+  for (const area of cachedAreas) {
+    const areaKey = normalize(area.name);
+    const polygon = (area as any).boundary_polygon || AREA_POLYGONS[areaKey];
 
     if (polygon && isPointInPolygon(lat, lng, polygon)) {
       return {
         isAvailable: true,
-        matchedCityName: city.name,
-        matchedCityObj: city,
-        message: `Service Available in ${city.name}`,
+        matchedAreaName: area.name,
+        matchedAreaObj: area,
+        matchedCityName: 'Lahore',
+        message: `Service Available in ${area.name}`,
       };
     }
   }
 
   // 2. Fallback check against hardcoded polygon registry
-  for (const [cityNameKey, polygon] of Object.entries(CITY_POLYGONS)) {
+  for (const [areaNameKey, polygon] of Object.entries(AREA_POLYGONS)) {
     if (isPointInPolygon(lat, lng, polygon)) {
-      const displayCity = cityNameKey.charAt(0).toUpperCase() + cityNameKey.slice(1);
+      const displayName =
+        areaNameKey === 'bahriatown'
+          ? 'Bahria Town'
+          : areaNameKey === 'modeltown'
+          ? 'Model Town'
+          : areaNameKey.charAt(0).toUpperCase() + areaNameKey.slice(1);
+
+      const matchedObj = cachedAreas.find(a => normalize(a.name) === areaNameKey);
+
       return {
         isAvailable: true,
-        matchedCityName: displayCity,
-        message: `Service Available in ${displayCity}`,
+        matchedAreaName: displayName,
+        matchedAreaObj: matchedObj,
+        matchedCityName: 'Lahore',
+        message: `Service Available in ${displayName}`,
       };
     }
   }
@@ -161,6 +176,5 @@ export const validateLocationServiceability = (
   if (latitude && longitude) {
     return validateCoordinatesServiceability(latitude, longitude);
   }
-  // If coordinates are missing, fallback to coordinate check via address if needed
   return { isAvailable: false, message: 'Services Not Available in this area' };
 };

@@ -121,10 +121,10 @@ const useCategoryStore = create<CategoryStoreState>((set, get) => ({
                 s.category_id !== undefined && s.category_id !== null
                     ? s.category_id
                     : typeof s.category === 'object' && s.category !== null
-                    ? s.category.id
-                    : typeof s.category === 'number'
-                    ? s.category
-                    : null;
+                        ? s.category.id
+                        : typeof s.category === 'number'
+                            ? s.category
+                            : null;
 
             const subCatName =
                 typeof s.category === 'object' && s.category !== null && s.category.name
@@ -168,10 +168,10 @@ const useCategoryStore = create<CategoryStoreState>((set, get) => ({
             sub.category_id !== undefined && sub.category_id !== null
                 ? sub.category_id
                 : typeof sub.category === 'object' && sub.category !== null
-                ? sub.category.id
-                : typeof sub.category === 'number'
-                ? sub.category
-                : null;
+                    ? sub.category.id
+                    : typeof sub.category === 'number'
+                        ? sub.category
+                        : null;
 
         const cat = categories.find((c) => Number(c.id) === Number(catId));
 

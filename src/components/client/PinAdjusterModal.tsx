@@ -172,12 +172,12 @@ export default function PinAdjusterModal({
   const handleDone = () => {
     if (!isAvailable) {
       if (Platform.OS === 'android') {
-        ToastAndroid.show('Services not available in this location. Move pin to a covered city.', ToastAndroid.LONG);
+        ToastAndroid.show('Services not available in this location. Move pin to a covered area.', ToastAndroid.LONG);
       } else {
         setTimeout(() => {
           Alert.alert(
             'Location Unavailable',
-            'We do not offer services in this location yet. Please move the pin to a supported city/area.'
+            'We do not offer services in this location yet. Please move the pin to a supported area.'
           );
         }, 100);
       }
@@ -249,7 +249,7 @@ export default function PinAdjusterModal({
             <View style={styles.unavailabilityBanner}>
               <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 6 }} />
               <Text style={styles.unavailabilityText}>
-                Services are not available in this area. Move pin to a covered city.
+                Services are not available in this area. Move pin to a covered area.
               </Text>
             </View>
           )}
@@ -278,20 +278,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: '50%',
     top: '50%',
-    marginLeft: -75,
+    marginLeft: -80,
     marginTop: -44, // Exact 44px pin height so bottom tip sits precisely at map center point
-    width: 150,
+    width: 160,
+    height: 44,
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     zIndex: 3,
   },
   pinPill: {
+    position: 'absolute',
+    bottom: 48,
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 14,
-    marginBottom: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
