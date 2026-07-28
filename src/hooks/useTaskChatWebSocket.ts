@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { logger } from '@/utils/logger';
 import {
   checkChatStatus,
@@ -38,6 +39,7 @@ export function useTaskChatWebSocket({
   token,
   enabled = true,
 }: UseTaskChatWebSocketOptions): UseTaskChatWebSocketResult {
+  const isFocused = useIsFocused();
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [isOpen, setIsOpen] = useState<boolean>(true);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
@@ -64,7 +66,7 @@ export function useTaskChatWebSocket({
   };
 
   const connect = useCallback(async () => {
-    if (!taskId || !enabled) return;
+    if (!taskId || !enabled || !isFocused) return;
 
     // Reset state
     setChatError(null);
@@ -91,7 +93,11 @@ export function useTaskChatWebSocket({
       logger.log('[useTaskChatWS] Connecting to:', wsUrl);
 
       if (socketRef.current) {
-        socketRef.current.close(1000);
+        socketRef.current.onclose = null;
+        socketRef.current.onerror = null;
+        socketRef.current.onmessage = null;
+        try { socketRef.current.close(1000); } catch (e) {}
+        socketRef.current = null;
       }
 
       const ws = new WebSocket(wsUrl);
@@ -168,11 +174,26 @@ export function useTaskChatWebSocket({
       setIsConnecting(false);
       setChatError('Failed to establish chat connection.');
     }
-  }, [taskId, token, enabled]);
+  }, [taskId, token, enabled, isFocused]);
 
   useEffect(() => {
     isComponentMounted.current = true;
-    connect();
+    if (enabled && isFocused && taskId) {
+      connect();
+    } else {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (socketRef.current) {
+        logger.log('[useTaskChatWS] Closing chat socket as screen is unfocused or disabled');
+        socketRef.current.onclose = null;
+        socketRef.current.onerror = null;
+        socketRef.current.onmessage = null;
+        try { socketRef.current.close(1000); } catch (e) {}
+        socketRef.current = null;
+      }
+      setIsConnecting(false);
+    }
 
     return () => {
       isComponentMounted.current = false;
@@ -181,11 +202,14 @@ export function useTaskChatWebSocket({
       }
       if (socketRef.current) {
         logger.log('[useTaskChatWS] Closing socket on cleanup');
-        socketRef.current.close(1000);
+        socketRef.current.onclose = null;
+        socketRef.current.onerror = null;
+        socketRef.current.onmessage = null;
+        try { socketRef.current.close(1000); } catch (e) {}
         socketRef.current = null;
       }
     };
-  }, [connect]);
+  }, [connect, enabled, isFocused, taskId]);
 
   // Step 6: Send a message
   const sendMessage = useCallback(

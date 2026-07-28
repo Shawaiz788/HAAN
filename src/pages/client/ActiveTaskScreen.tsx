@@ -153,12 +153,8 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
 
           setCompletedTaskInfo({ id: taskId, proName, proId, title: taskTitle });
           setReviewModalVisible(true);
-        } else if (taskData.status_id === 5 || taskData.status_id === 3) {
-          Alert.alert(
-            'Task Cancelled',
-            'This task request was cancelled.',
-            [{ text: 'OK', onPress: () => cancelTask() }]
-          );
+        } else if (taskData.status_id === 5) {
+          cancelTask()
         }
       } catch (err) {
         console.warn('[ActiveTaskScreen] Error polling task status:', err);

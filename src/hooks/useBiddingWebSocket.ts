@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { AppState, AppStateStatus, ToastAndroid, Alert, Platform } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { getCustomerProfile, normalizeImageUrl } from '@/services/customer';
 import { useAuth } from '@/context/auth';
 import { USER_TYPE_CLIENT } from '@/constants/userTypes';
@@ -66,17 +67,13 @@ export async function sendQuickBidViaWebSocket(
         let ws: WebSocket | null = null;
 
         const cleanup = () => {
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-            }
+            if (timeoutId) clearTimeout(timeoutId);
             if (ws) {
                 ws.onopen = null;
                 ws.onmessage = null;
                 ws.onerror = null;
                 ws.onclose = null;
-                try {
-                    ws.close(1000);
-                } catch (e) {}
+                try { ws.close(1000); } catch (e) {}
                 ws = null;
             }
         };
@@ -96,12 +93,7 @@ export async function sendQuickBidViaWebSocket(
             ws = new WebSocket(url);
 
             ws.onopen = () => {
-                const payload = {
-                    type: 'place_bid',
-                    user_id: userId,
-                    price,
-                    estimated_hours: estimatedHours,
-                };
+                const payload = { type: 'place_bid', user_id: userId, price, estimated_hours: estimatedHours };
                 logger.log('[sendQuickBidViaWebSocket] Sending payload:', payload);
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify(payload));
@@ -113,17 +105,9 @@ export async function sendQuickBidViaWebSocket(
                     const data = JSON.parse(event.data);
                     logger.log('[sendQuickBidViaWebSocket] Received message:', data);
                     if (data.type === 'bid_placed' && String(data.bid?.user_id) === String(userId)) {
-                        if (!isSettled) {
-                            isSettled = true;
-                            cleanup();
-                            resolve();
-                        }
+                        if (!isSettled) { isSettled = true; cleanup(); resolve(); }
                     } else if (data.type === 'bidding_closed') {
-                        if (!isSettled) {
-                            isSettled = true;
-                            cleanup();
-                            reject(new Error('Bidding is closed for this task.'));
-                        }
+                        if (!isSettled) { isSettled = true; cleanup(); reject(new Error('Bidding is closed for this task.')); }
                     }
                 } catch (e) {
                     logger.warn('[sendQuickBidViaWebSocket] Error parsing response message:', e);
@@ -132,27 +116,15 @@ export async function sendQuickBidViaWebSocket(
 
             ws.onerror = (err) => {
                 logger.error('[sendQuickBidViaWebSocket] Quick bid socket error:', err);
-                if (!isSettled) {
-                    isSettled = true;
-                    cleanup();
-                    reject(err);
-                }
+                if (!isSettled) { isSettled = true; cleanup(); reject(err); }
             };
 
             ws.onclose = (event) => {
                 logger.log(`[sendQuickBidViaWebSocket] Quick bid socket closed. Code: ${event.code}`);
-                if (!isSettled) {
-                    isSettled = true;
-                    cleanup();
-                    reject(new Error(`Connection closed. Code: ${event.code}`));
-                }
+                if (!isSettled) { isSettled = true; cleanup(); reject(new Error(`Connection closed. Code: ${event.code}`)); }
             };
         } catch (e) {
-            if (!isSettled) {
-                isSettled = true;
-                cleanup();
-                reject(e);
-            }
+            if (!isSettled) { isSettled = true; cleanup(); reject(e); }
         }
     });
 }
@@ -178,6 +150,7 @@ export function useBiddingWebSocket({
     onTaskAssignedToOther,
 }: UseBiddingWebSocketOptions): UseBiddingWebSocketResult {
     const { user } = useAuth();
+    const isFocused = useIsFocused();
     const userId = passedUserId ?? user?.id;
     const isCustomer = passedIsCustomer ?? (user?.usertype_id === USER_TYPE_CLIENT);
     const [bids, setBids] = useState<BidsWSBid[]>([]);
@@ -456,18 +429,20 @@ export function useBiddingWebSocket({
     }, []);
 
     useEffect(() => {
-        shouldConnectRef.current = enabled && Boolean(taskId) && Boolean(userId);
+        shouldConnectRef.current = enabled && isFocused && Boolean(taskId) && Boolean(userId);
 
         if (shouldConnectRef.current) {
             connect();
         } else {
+            logger.log(`[useBiddingWebSocket] Closing bidding socket for task ${taskId} -> enabled: ${enabled}, isFocused: ${isFocused}`);
             clearRetryTimer();
+            clearWatchdogTimer();
             closeSocket();
             setBids([]);
             setIsBiddingClosed(false);
             setWinningBid(null);
         }
-    }, [enabled, taskId, userId, connect, closeSocket]);
+    }, [enabled, isFocused, taskId, userId, connect, closeSocket]);
 
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {

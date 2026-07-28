@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { AppState, AppStateStatus, Platform, ToastAndroid, Alert } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { getLocationById } from '@/services/location';
 import { getCustomerProfile, normalizeImageUrl } from '@/services/customer';
 import { getOpenTasksFromBackend } from '@/services/task';
@@ -100,12 +101,15 @@ function clearGlobalRetryTimer() {
 
 function closeGlobalSocket() {
     clearGlobalConnectTimeout();
+    clearGlobalRetryTimer();
     if (globalWs) {
         logger.warn('[useProWebSocket] Closing global LiveJobs WebSocket connection...');
         globalWs.onclose = null;
         globalWs.onerror = null;
         globalWs.onmessage = null;
-        globalWs.close();
+        try {
+            globalWs.close(1000, 'Intentional close');
+        } catch (e) {}
         globalWs = null;
         logger.warn('[useProWebSocket] Global LiveJobs WebSocket closed.');
     }
@@ -372,6 +376,7 @@ export function useProWebSocket({
 }: UseProWebSocketOptions): UseProWebSocketResult {
     const { user } = useAuth();
     const userId = passedUserId ?? user?.id;
+    const isFocused = useIsFocused();
 
     const [, forceUpdate] = useState({});
 
@@ -390,12 +395,14 @@ export function useProWebSocket({
 
     useEffect(() => {
         globalUserId = userId;
-        globalShouldConnect = isOnline && !!userId;
+        const shouldBeConnected = isOnline && !!userId && isFocused;
+        globalShouldConnect = shouldBeConnected;
 
-        if (isOnline && userId) {
+        if (shouldBeConnected) {
             connectGlobalSocket();
             fetchOpenJobsGlobal();
         } else {
+            logger.log(`[useProWebSocket] Closing global socket -> isOnline: ${isOnline}, isFocused: ${isFocused}, userId: ${userId}`);
             globalShouldConnect = false;
             clearGlobalRetryTimer();
             closeGlobalSocket();
@@ -404,7 +411,7 @@ export function useProWebSocket({
             globalWsStatus = 'disconnected';
             notifyListeners();
         }
-    }, [isOnline, userId]);
+    }, [isOnline, userId, isFocused]);
 
     const refresh = useCallback(async () => {
         if (!globalShouldConnect) return;

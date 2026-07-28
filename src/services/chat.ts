@@ -46,6 +46,7 @@ export const checkChatStatus = async (
 
   const responseText = await response.text();
   logger.log('[chat API] Check chat status response status:', response.status);
+  logger.log('[chat API] Check chat status response body:', responseText)
 
   if (!response.ok) {
     if (response.status === 404 || response.status === 403) {
