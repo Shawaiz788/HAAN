@@ -1,5 +1,5 @@
 import React from 'react';
-import { TaskChatModal } from '@/components/common/TaskChatModal';
+import { TaskChatModal } from '../common/TaskChatModal';
 
 interface ClientChatModalProps {
   visible: boolean;

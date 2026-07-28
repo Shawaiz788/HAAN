@@ -199,7 +199,7 @@ export const styles = StyleSheet.create({
     },
     contactBtnText: {
         color: Colors.white,
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '700',
     },
     jobCard: {

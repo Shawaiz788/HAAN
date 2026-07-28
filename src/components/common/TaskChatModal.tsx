@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/auth';
-import { useTaskChatWebSocket } from '@/hooks/useTaskChatWebSocket';
+import { useTaskChatWebSocket } from '../../hooks/useTaskChatWebSocket';
 import { Colors } from '@/constants/colors';
 
 export interface TaskChatModalProps {
@@ -423,3 +423,5 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
 });
+
+export default TaskChatModal;

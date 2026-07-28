@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 import { LiveJob } from '@/hooks/useProWebSocket';
 import UserReviewsModal from '@/components/UserReviewsModal';
-import { TaskChatModal } from '@/components/common/TaskChatModal';
+import { TaskChatModal } from '../common/TaskChatModal';
 import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/store/paymentStore';
 import { styles } from '@/styles/proActiveTaskModal.styles';
 
@@ -144,7 +144,7 @@ export default function ProActiveTaskModal({
                     {/* Customer Profile Card */}
                     <View style={styles.customerCard}>
                         <Text style={styles.sectionHeading}>Customer Details</Text>
-                        <Pressable 
+                        <Pressable
                             style={styles.customerRow}
                             onPress={() => {
                                 if (job.customer_id) {
@@ -186,18 +186,18 @@ export default function ProActiveTaskModal({
                         {!isCancelled && (
                             <View style={styles.contactButtonsRow}>
                                 <Pressable style={[styles.contactBtn, styles.chatBtn]} onPress={() => setChatVisible(true)}>
-                                    <Ionicons name="chatbubble-ellipses" size={20} color={Colors.white} />
-                                    <Text style={styles.contactBtnText}>In-App Chat</Text>
+                                    <Ionicons name="chatbubble-ellipses" size={18} color={Colors.white} />
+                                    <Text style={styles.contactBtnText} numberOfLines={1}>In-App Chat</Text>
                                 </Pressable>
 
                                 <Pressable style={[styles.contactBtn, styles.whatsappBtn]} onPress={handleWhatsApp}>
-                                    <Ionicons name="logo-whatsapp" size={20} color={Colors.white} />
-                                    <Text style={styles.contactBtnText}>WhatsApp</Text>
+                                    <Ionicons name="logo-whatsapp" size={18} color={Colors.white} />
+                                    <Text style={styles.contactBtnText} numberOfLines={1}>WhatsApp</Text>
                                 </Pressable>
 
                                 <Pressable style={[styles.contactBtn, styles.callBtn]} onPress={handleCall}>
-                                    <Ionicons name="call" size={20} color={Colors.white} />
-                                    <Text style={styles.contactBtnText}>Call</Text>
+                                    <Ionicons name="call" size={18} color={Colors.white} />
+                                    <Text style={styles.contactBtnText} numberOfLines={1}>Call</Text>
                                 </Pressable>
                             </View>
                         )}

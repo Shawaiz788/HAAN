@@ -39,8 +39,9 @@ type WSMessage =
     }
     | { type: 'heartbeat'; task?: null }
     | {
-        type: 'task_deleted';
+        type: 'task_deleted' | 'task_assigned' | 'task_accepted' | 'bidding_closed' | 'task_closed' | 'task_cancelled';
         task_id?: number;
+        id?: number;
         worker_id?: number;
     };
 
@@ -49,6 +50,7 @@ export type WSStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecti
 interface UseProWebSocketOptions {
     userId?: number | undefined;
     isOnline: boolean;
+    onTaskAssignedToWorker?: (taskId: number, workerId: number) => void;
     onTaskCancelledForWorker?: (taskId: number, workerId: number) => void;
     proLocation?: { latitude: number; longitude: number } | null;
 }
@@ -75,6 +77,7 @@ let globalShouldConnect = false;
 let globalUserId: number | undefined = undefined;
 let globalConnectTimeout: NodeJS.Timeout | null = null;
 let globalOnTaskCancelled: ((taskId: number, workerId: number) => void) | undefined = undefined;
+let globalOnTaskAssignedToWorker: ((taskId: number, workerId: number) => void) | undefined = undefined;
 
 const listeners = new Set<() => void>();
 const notifyListeners = () => {
@@ -257,7 +260,16 @@ function connectGlobalSocket() {
                     globalJobs = globalJobs.filter((j) => Number(j.id) !== Number(closedTaskId));
                     notifyListeners();
 
-                    if (msgWorkerId && globalOnTaskCancelled) {
+                    const isAssignedToMe =
+                        msgWorkerId &&
+                        globalUserId &&
+                        Number(msgWorkerId) === Number(globalUserId) &&
+                        (msg.type === 'task_assigned' || msg.type === 'task_accepted');
+
+                    if (isAssignedToMe && globalOnTaskAssignedToWorker) {
+                        logger.log(`[useProWebSocket] Task ${closedTaskId} assigned to current worker ${msgWorkerId}! Triggering assignment callback.`);
+                        globalOnTaskAssignedToWorker(Number(closedTaskId), Number(msgWorkerId));
+                    } else if (msgWorkerId && globalOnTaskCancelled && (msg.type === 'task_deleted' || msg.type === 'task_cancelled')) {
                         globalOnTaskCancelled(Number(closedTaskId), Number(msgWorkerId));
                     }
                 }
@@ -354,6 +366,7 @@ AppState.addEventListener('change', (nextState: AppStateStatus) => {
 export function useProWebSocket({
     userId: passedUserId,
     isOnline,
+    onTaskAssignedToWorker,
     onTaskCancelledForWorker,
     proLocation,
 }: UseProWebSocketOptions): UseProWebSocketResult {
@@ -363,8 +376,9 @@ export function useProWebSocket({
     const [, forceUpdate] = useState({});
 
     useEffect(() => {
+        globalOnTaskAssignedToWorker = onTaskAssignedToWorker;
         globalOnTaskCancelled = onTaskCancelledForWorker;
-    }, [onTaskCancelledForWorker]);
+    }, [onTaskAssignedToWorker, onTaskCancelledForWorker]);
 
     useEffect(() => {
         const listener = () => forceUpdate({});

@@ -18,6 +18,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/auth';
 import { Colors } from '@/constants/colors';
 import { getWorkerTasksFromBackend, getTaskByIdFromBackend, updateTaskStatusOnBackend, getCompletedStatusId } from '@/services/task';
+import { getCustomerProfile, normalizeImageUrl } from '@/services/customer';
+import { getLocationById } from '@/services/location';
 import useProEarningsStore from '@/store/proEarningsStore';
 import useProTaskStore from '@/store/proTaskStore';
 import useProOnlineStore from '@/store/proOnlineStore';
@@ -70,6 +72,9 @@ export default function ProLiveJobsView() {
     const { jobs: wsJobs, wsStatus, hasNoJobs, refresh: wsRefresh } = useProWebSocket({
         userId: user?.id,
         isOnline,
+        onTaskAssignedToWorker: (taskId, workerId) => {
+            handleJobAcceptedForPro(taskId, { worker_id: workerId });
+        },
         onTaskCancelledForWorker: (taskId, workerId) => {
             handleTaskCancelledByCustomer(taskId);
         },
@@ -119,25 +124,86 @@ export default function ProLiveJobsView() {
             setIsCancelledJob(true);
             setActiveModalJob(currentAssigned);
             setActiveModalVisible(true);
+            setAssignedJob(null);
         }
-    }, []);
+    }, [setAssignedJob]);
 
-    const handleJobAcceptedForPro = useCallback((jobId: number, bidPayload: any) => {
+    const handleJobAcceptedForPro = useCallback(async (jobId: number, bidPayload: any) => {
         console.log(`[ProLiveJobsView] handleJobAcceptedForPro called for job ${jobId}`);
-        const found = wsJobs.find((j) => Number(j.id) === Number(jobId)) ||
+        let found = wsJobs.find((j) => Number(j.id) === Number(jobId)) ||
             MOCK_JOBS.find((j) => Number(j.id) === Number(jobId)) ||
             (selectedJob && Number(selectedJob.id) === Number(jobId) ? selectedJob : null);
 
-        if (found) {
-            const assigned: LiveJob = {
-                ...found,
-                budget: bidPayload?.price || found.budget,
-            };
-            setAssignedJob(assigned);
-            setActiveModalJob(assigned);
-            setIsCancelledJob(false);
-            setActiveModalVisible(true);
-            setSheetVisible(false);
+        const baseJob: LiveJob = found || {
+            id: Number(jobId),
+            title: `Task #${jobId}`,
+            description: 'Accepted Task',
+            category: 'Active Service',
+            budget: Number(bidPayload?.price || 0),
+            location_name: 'Customer Location',
+            customer_id: bidPayload?.created_by || 1,
+            customer_name: 'Customer',
+        };
+
+        const assigned: LiveJob = {
+            ...baseJob,
+            budget: bidPayload?.price ? Number(bidPayload.price) : baseJob.budget,
+        };
+
+        setAssignedJob(assigned);
+        setActiveModalJob(assigned);
+        setIsCancelledJob(false);
+        setActiveModalVisible(true);
+        setSheetVisible(false);
+
+        try {
+            const taskData = await getTaskByIdFromBackend(Number(jobId));
+            if (taskData) {
+                const customerId = taskData.created_by || assigned.customer_id;
+                const locationId = taskData.location_id;
+
+                let cName = (taskData as any).customer_name || assigned.customer_name;
+                let cImage = (taskData as any).customer_image || assigned.customer_image;
+                let cRating = (taskData as any).customer_rating || assigned.customer_rating;
+                let cProfile = assigned.customer_profile;
+                let locName = assigned.location_name;
+
+                const [pRes, lRes] = await Promise.allSettled([
+                    customerId ? getCustomerProfile(customerId) : Promise.resolve(null),
+                    locationId ? getLocationById(locationId) : Promise.resolve(null),
+                ]);
+
+                if (pRes.status === 'fulfilled' && pRes.value) {
+                    const p = pRes.value;
+                    cProfile = p;
+                    const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
+                    if (fullName) cName = fullName;
+                    cImage = normalizeImageUrl(p.image) || cImage;
+                    cRating = p.overall_rating ?? cRating;
+                }
+
+                if (lRes.status === 'fulfilled' && lRes.value) {
+                    locName = lRes.value.formatted_address || locName;
+                }
+
+                const enrichedJob: LiveJob = {
+                    id: taskData.id ?? Number(jobId),
+                    title: taskData.subject || assigned.title,
+                    description: taskData.body || assigned.description,
+                    category: 'Active Service',
+                    budget: taskData.price ?? assigned.budget,
+                    location_name: locName,
+                    customer_id: customerId,
+                    customer_name: cName,
+                    customer_image: cImage,
+                    customer_rating: cRating,
+                    customer_profile: cProfile,
+                };
+                setAssignedJob(enrichedJob);
+                setActiveModalJob(enrichedJob);
+            }
+        } catch (e) {
+            console.warn('[ProLiveJobsView] Async fetch task by ID failed:', e);
         }
     }, [wsJobs, selectedJob, setAssignedJob]);
 
@@ -238,6 +304,41 @@ export default function ProLiveJobsView() {
                 </View>
             )}
 
+            {/* Active Task Banner */}
+            {isOnline && assignedJob && (
+                <Pressable
+                    style={{
+                        backgroundColor: '#047857',
+                        marginHorizontal: 16,
+                        marginTop: 12,
+                        marginBottom: 4,
+                        borderRadius: 12,
+                        padding: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                    }}
+                    onPress={() => {
+                        setActiveModalJob(assignedJob);
+                        setIsCancelledJob(false);
+                        setActiveModalVisible(true);
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
+                        <Ionicons name="flash" size={20} color="#34D399" />
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }} numberOfLines={1}>
+                                Active Job: {assignedJob.title}
+                            </Text>
+                            <Text style={{ color: '#A7F3D0', fontSize: 12 }}>
+                                Tap to open chat & task details
+                            </Text>
+                        </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
+                </Pressable>
+            )}
+
             {/* Content Area */}
             {!isOnline ? (
                 <OfflineState />
@@ -267,7 +368,7 @@ export default function ProLiveJobsView() {
                                     );
                                     return;
                                 }
-                                sendQuickBidViaWebSocket(j.id, amt, user?.id || 1);
+                                sendQuickBidViaWebSocket(j.id, user?.id || 1, amt);
                                 placeBid(j.id, amt);
                             }}
                             activeBid={getActiveBid(job.id)}
@@ -326,6 +427,9 @@ export default function ProLiveJobsView() {
                 isCancelled={isCancelledJob}
                 onClose={() => {
                     setActiveModalVisible(false);
+                    if (isCancelledJob) {
+                        setAssignedJob(null);
+                    }
                     setIsCancelledJob(false);
                 }}
                 onCompleteTask={handleCompleteTask}
