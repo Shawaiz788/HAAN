@@ -194,6 +194,9 @@ export const styles = StyleSheet.create({
     callBtn: {
         backgroundColor: '#3B82F6',
     },
+    chatBtn: {
+        backgroundColor: '#059669',
+    },
     contactBtnText: {
         color: Colors.white,
         fontSize: 14,

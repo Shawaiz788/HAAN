@@ -397,20 +397,15 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
           </Pressable>
         </View>
 
-        {/* Temporary Chat Modal */}
+        {/* Task Chat Modal */}
         {activeTask.status === 'accepted' && activeTask.acceptedBid && (
           <ClientChatModal
             visible={chatVisible}
             onClose={() => setChatVisible(false)}
+            taskId={taskId}
             proAvatar={activeTask.acceptedBid.avatar}
             proName={activeTask.acceptedBid.name}
             onCall={() => handleCall(activeTask.acceptedBid!)}
-            activeChatMessages={activeChatMessages}
-            chatInput={chatInput}
-            setChatInput={setChatInput}
-            onSendChat={handleSendChat}
-            insetsTop={insets.top}
-            insetsBottom={insets.bottom}
           />
         )}
 

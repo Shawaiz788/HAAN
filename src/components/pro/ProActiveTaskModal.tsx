@@ -3,7 +3,6 @@ import {
     Modal,
     View,
     Text,
-    StyleSheet,
     Pressable,
     Image,
     ScrollView,
@@ -18,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 import { LiveJob } from '@/hooks/useProWebSocket';
 import UserReviewsModal from '@/components/UserReviewsModal';
+import { TaskChatModal } from '@/components/common/TaskChatModal';
 import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/store/paymentStore';
 import { styles } from '@/styles/proActiveTaskModal.styles';
 
@@ -47,6 +47,7 @@ export default function ProActiveTaskModal({
     const insets = useSafeAreaInsets();
     const [isCompleting, setIsCompleting] = useState(false);
     const [customerReviewsVisible, setCustomerReviewsVisible] = useState(false);
+    const [chatVisible, setChatVisible] = useState(false);
 
     if (!job || !isVisible) return null;
 
@@ -158,7 +159,7 @@ export default function ProActiveTaskModal({
                                     <Text style={styles.avatarInitials}>
                                         {job.customer_name
                                             ? job.customer_name.slice(0, 2).toUpperCase()
-                                             : 'CU'}
+                                            : 'CU'}
                                     </Text>
                                 </View>
                             )}
@@ -184,14 +185,19 @@ export default function ProActiveTaskModal({
                         {/* Direct Contact Buttons (Only active when NOT cancelled) */}
                         {!isCancelled && (
                             <View style={styles.contactButtonsRow}>
+                                <Pressable style={[styles.contactBtn, styles.chatBtn]} onPress={() => setChatVisible(true)}>
+                                    <Ionicons name="chatbubble-ellipses" size={20} color={Colors.white} />
+                                    <Text style={styles.contactBtnText}>In-App Chat</Text>
+                                </Pressable>
+
                                 <Pressable style={[styles.contactBtn, styles.whatsappBtn]} onPress={handleWhatsApp}>
                                     <Ionicons name="logo-whatsapp" size={20} color={Colors.white} />
-                                    <Text style={styles.contactBtnText}>Message WhatsApp</Text>
+                                    <Text style={styles.contactBtnText}>WhatsApp</Text>
                                 </Pressable>
 
                                 <Pressable style={[styles.contactBtn, styles.callBtn]} onPress={handleCall}>
                                     <Ionicons name="call" size={20} color={Colors.white} />
-                                    <Text style={styles.contactBtnText}>Call Customer</Text>
+                                    <Text style={styles.contactBtnText}>Call</Text>
                                 </Pressable>
                             </View>
                         )}
@@ -267,6 +273,17 @@ export default function ProActiveTaskModal({
                 </ScrollView>
             </View>
 
+            {/* In-App WebSocket Task Chat Modal for Pro */}
+            <TaskChatModal
+                visible={chatVisible}
+                onClose={() => setChatVisible(false)}
+                taskId={job.id}
+                otherUserName={job.customer_name || 'Customer'}
+                otherUserAvatar={job.customer_image}
+                onCall={handleCall}
+                role="pro"
+            />
+
             {/* Customer Reviews Modal */}
             <UserReviewsModal
                 isVisible={customerReviewsVisible}
@@ -278,5 +295,3 @@ export default function ProActiveTaskModal({
         </Modal>
     );
 }
-
-
