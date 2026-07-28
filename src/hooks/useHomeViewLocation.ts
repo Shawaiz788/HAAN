@@ -257,13 +257,14 @@ export function useHomeViewLocation({ webViewRef }: UseHomeViewLocationProps) {
       if (webViewRef.current) {
         const jsCode = `
           if (map) {
+            var currZoom = map.getZoom() || 15;
             var targetLatLng = L.latLng(${newCoords.latitude}, ${newCoords.longitude});
-            var targetPoint = map.project(targetLatLng, 15);
+            var targetPoint = map.project(targetLatLng, currZoom);
             var size = map.getSize();
             var offset = L.point(0, size.y * (0.5 - 0.35));
             var centerPoint = targetPoint.add(offset);
-            var centerLatLng = map.unproject(centerPoint, 15);
-            map.setView(centerLatLng, 15);
+            var centerLatLng = map.unproject(centerPoint, currZoom);
+            map.setView(centerLatLng, currZoom);
           }
           true;
         `;
@@ -279,13 +280,14 @@ export function useHomeViewLocation({ webViewRef }: UseHomeViewLocationProps) {
     if (webViewRef.current) {
       const jsCode = `
         if (map) {
+          var currZoom = map.getZoom() || 15;
           var targetLatLng = L.latLng(${coords.latitude}, ${coords.longitude});
-          var targetPoint = map.project(targetLatLng, 15);
+          var targetPoint = map.project(targetLatLng, currZoom);
           var size = map.getSize();
           var offset = L.point(0, size.y * (0.5 - 0.35));
           var centerPoint = targetPoint.add(offset);
-          var centerLatLng = map.unproject(centerPoint, 15);
-          map.setView(centerLatLng, 15);
+          var centerLatLng = map.unproject(centerPoint, currZoom);
+          map.setView(centerLatLng, currZoom);
         }
         true;
       `;
@@ -325,13 +327,14 @@ export function useHomeViewLocation({ webViewRef }: UseHomeViewLocationProps) {
         if (webViewRef.current) {
           const jsCode = `
             if (map) {
+              var currZoom = map.getZoom() || 15;
               var targetLatLng = L.latLng(${newCoords.latitude}, ${newCoords.longitude});
-              var targetPoint = map.project(targetLatLng, 15);
+              var targetPoint = map.project(targetLatLng, currZoom);
               var size = map.getSize();
               var offset = L.point(0, size.y * (0.5 - 0.35));
               var centerPoint = targetPoint.add(offset);
-              var centerLatLng = map.unproject(centerPoint, 15);
-              map.setView(centerLatLng, 15);
+              var centerLatLng = map.unproject(centerPoint, currZoom);
+              map.setView(centerLatLng, currZoom);
             }
             true;
           `;

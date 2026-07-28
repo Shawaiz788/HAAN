@@ -93,30 +93,50 @@ export default function ProLiveJobsView() {
     // Sync active worker task from backend on load to verify MMKV state against backend
     useEffect(() => {
         if (!user?.id) return;
-        getWorkerTasksFromBackend(user.id).then((tasks) => {
-            const activeBackendTask = Array.isArray(tasks) ? tasks.find((t) => t.status_id !== 4 && t.status_id !== 5 && t.status_id !== 3) : undefined;
-            if (activeBackendTask) {
-                const currentAssigned = useProTaskStore.getState().activeProTask;
-                if (!currentAssigned || Number(currentAssigned.id) !== Number(activeBackendTask.id)) {
-                    const restoredJob: LiveJob = {
-                        id: activeBackendTask.id!,
-                        title: activeBackendTask.subject || 'Active Task',
-                        description: activeBackendTask.body || '',
-                        category: 'Active Service',
-                        budget: activeBackendTask.price,
-                        location_name: 'Customer Location',
-                        customer_id: activeBackendTask.created_by,
-                        customer_name: (activeBackendTask as any).customer_name || 'Customer',
-                    };
-                    setAssignedJob(restoredJob);
+        const workerId = Number(user.id);
+        if (isNaN(workerId) || workerId <= 0) return;
+        let isMounted = true;
+        (async () => {
+            try {
+                const tasks = await getWorkerTasksFromBackend(workerId);
+                if (!isMounted) return;
+                const activeBackendTask = Array.isArray(tasks) ? tasks.find((t) => t.status_id !== 4 && t.status_id !== 5 && t.status_id !== 3) : undefined;
+                if (activeBackendTask) {
+                    const currentAssigned = useProTaskStore.getState().activeProTask;
+                    if (!currentAssigned || Number(currentAssigned.id) !== Number(activeBackendTask.id)) {
+                        const restoredJob: LiveJob = {
+                            id: activeBackendTask.id!,
+                            title: activeBackendTask.subject || 'Active Task',
+                            description: activeBackendTask.body || '',
+                            category: 'Active Service',
+                            budget: activeBackendTask.price,
+                            location_name: 'Customer Location',
+                            customer_id: activeBackendTask.created_by,
+                            customer_name: (activeBackendTask as any).customer_name || 'Customer',
+                        };
+                        setAssignedJob(restoredJob);
+                    }
+                } else {
+                    const currentAssigned = useProTaskStore.getState().activeProTask;
+                    if (currentAssigned?.id) {
+                        console.log(`[ProLiveJobsView] No active task in worker list. Verifying active task ${currentAssigned.id} individually...`);
+                        const singleTask = await getTaskByIdFromBackend(Number(currentAssigned.id));
+                        if (!isMounted) return;
+                        if (!singleTask || singleTask.status_id === 4 || singleTask.status_id === 5 || singleTask.status_id === 3) {
+                            console.log(`[ProLiveJobsView] Confirmed task ${currentAssigned.id} is ended. Clearing active pro task.`);
+                            setAssignedJob(null);
+                        } else {
+                            console.log(`[ProLiveJobsView] Task ${currentAssigned.id} is still active on backend. Retaining active pro task.`);
+                        }
+                    }
                 }
-            } else {
-                setAssignedJob(null);
+            } catch (err) {
+                console.warn('[ProLiveJobsView] Sync worker tasks error:', err);
             }
-        }).catch((err) => {
-            console.warn('[ProLiveJobsView] Sync worker tasks error:', err);
-        });
-    }, [user?.id]);
+        })();
+
+        return () => { isMounted = false; };
+    }, [user?.id, setAssignedJob]);
 
     const handleTaskCancelledByCustomer = useCallback((taskId: number) => {
         const currentAssigned = useProTaskStore.getState().activeProTask;

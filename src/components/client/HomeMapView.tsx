@@ -10,7 +10,7 @@ export const getLeafletHtml = (lat: number, lng: number) => `
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=10.0, user-scalable=yes" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
@@ -121,17 +121,22 @@ export default function HomeMapView({
   activeTaskBannerStyle,
   setViewActiveTaskScreen,
 }: HomeMapViewProps) {
+  const mapSource = React.useMemo(() => {
+    if (!initialCoords) return null;
+    return { html: getLeafletHtml(initialCoords.latitude, initialCoords.longitude) };
+  }, [initialCoords?.latitude, initialCoords?.longitude]);
+
   return (
     <>
       {/* 1. MAP BACKGROUND */}
       <View style={styles.mapContainer}>
-        {initialCoords && (
+        {mapSource && (
           <WebView
             ref={webViewRef}
             style={styles.map}
-            source={{ html: getLeafletHtml(initialCoords.latitude, initialCoords.longitude) }}
+            source={mapSource}
             onMessage={handleMapMessage}
-            scrollEnabled={false}
+            nestedScrollEnabled
             overScrollMode="never"
           />
         )}

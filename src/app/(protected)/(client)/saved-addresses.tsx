@@ -143,6 +143,11 @@ export default function SavedAddressesScreen() {
     }
   };
 
+  const mapSource = React.useMemo(() => {
+    if (!initialMapCoords) return null;
+    return { html: getLeafletHtml(initialMapCoords.lat, initialMapCoords.lng) };
+  }, [initialMapCoords?.lat, initialMapCoords?.lng]);
+
   // ── Re-center map to current GPS location ──
   const reCenterMap = async () => {
     try {
@@ -347,11 +352,11 @@ export default function SavedAddressesScreen() {
 
       {/* Interactive Map */}
       <View style={styles.mapSection}>
-        {initialMapCoords && (
+        {mapSource && (
           <WebView
             ref={webViewRef}
             style={styles.mapWebView}
-            source={{ html: getLeafletHtml(initialMapCoords.lat, initialMapCoords.lng) }}
+            source={mapSource}
             onMessage={handleMapMessage}
             nestedScrollEnabled
             overScrollMode="never"

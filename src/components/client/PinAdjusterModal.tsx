@@ -202,6 +202,10 @@ export default function PinAdjusterModal({
     onConfirm(adjusterCoords, adjusterAddress);
   };
 
+  const mapSource = React.useMemo(() => {
+    return { html: getAdjusterLeafletHtml(initialCoords.latitude, initialCoords.longitude) };
+  }, [initialCoords.latitude, initialCoords.longitude]);
+
   return (
     <Modal
       visible={visible}
@@ -213,7 +217,7 @@ export default function PinAdjusterModal({
         <WebView
           ref={adjusterWebViewRef}
           style={styles.adjusterMap}
-          source={{ html: getAdjusterLeafletHtml(initialCoords.latitude, initialCoords.longitude) }}
+          source={mapSource}
           onMessage={handleAdjusterMapMessage}
           scrollEnabled={false}
           overScrollMode="never"

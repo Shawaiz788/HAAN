@@ -126,22 +126,25 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
               });
             }
           } else if (currentActive?.backend_id) {
-            logger.log('[PostJobProvider] Clearing active task as backend reports no active tasks.');
-            setStoreActiveTask(null);
+            logger.log('[PostJobProvider] Customer tasks list contained no active tasks. Verifying active task via individual API before clearing...');
+            const singleTask = await getTaskByIdFromBackend(currentActive.backend_id);
+            if (!isMounted) return;
+            if (!singleTask || singleTask.status_id === TASK_STATUS.CANCELLED || singleTask.status_id === TASK_STATUS.CANCELLED_BY_SYSTEM || singleTask.status_id === TASK_STATUS.COMPLETED) {
+              logger.log('[PostJobProvider] Confirmed task is ended on backend. Clearing active task.');
+              setStoreActiveTask(null);
+            } else {
+              logger.log(`[PostJobProvider] Task ${currentActive.backend_id} is still active on backend (status_id=${singleTask.status_id}). Retaining active task.`);
+            }
           }
         } else if (currentActive?.backend_id) {
-          logger.log('[PostJobProvider] Backend returned 0 tasks. Clearing stale MMKV active task.');
-          setStoreActiveTask(null);
-        }
-
-        // Verify current active task still exists on backend
-        const updatedCurrentActive = useTaskStore.getState().activeTask;
-        if (updatedCurrentActive?.backend_id) {
-          const singleTask = await getTaskByIdFromBackend(updatedCurrentActive.backend_id);
+          logger.log('[PostJobProvider] Backend customer task list empty. Verifying active task via individual API before clearing...');
+          const singleTask = await getTaskByIdFromBackend(currentActive.backend_id);
           if (!isMounted) return;
-          if (!singleTask || singleTask.status_id === TASK_STATUS.CANCELLED || singleTask.status_id === TASK_STATUS.CANCELLED_BY_SYSTEM) {
-            logger.log(`[PostJobProvider] Active task ${updatedCurrentActive.backend_id} is deleted/cancelled on backend. Clearing MMKV.`);
+          if (!singleTask || singleTask.status_id === TASK_STATUS.CANCELLED || singleTask.status_id === TASK_STATUS.CANCELLED_BY_SYSTEM || singleTask.status_id === TASK_STATUS.COMPLETED) {
+            logger.log('[PostJobProvider] Confirmed task is ended on backend. Clearing MMKV.');
             setStoreActiveTask(null);
+          } else {
+            logger.log(`[PostJobProvider] Task ${currentActive.backend_id} is still active on backend (status_id=${singleTask.status_id}). Retaining active task.`);
           }
         }
       } catch (err) {

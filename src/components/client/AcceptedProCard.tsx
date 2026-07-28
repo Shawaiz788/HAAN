@@ -11,6 +11,8 @@ interface AcceptedProCardProps {
   onWhatsApp: () => void;
   onOpenChat: () => void;
   onSelectPro: (proId: number, name: string) => void;
+  onRetryProfile?: () => void;
+  isRetryingProfile?: boolean;
 }
 
 export function AcceptedProCard({
@@ -20,7 +22,12 @@ export function AcceptedProCard({
   onWhatsApp,
   onOpenChat,
   onSelectPro,
+  onRetryProfile,
+  isRetryingProfile = false,
 }: AcceptedProCardProps) {
+  const isFallbackName = !acceptedBid.name || acceptedBid.name.startsWith('Professional #') || acceptedBid.name.startsWith('Worker #');
+  const showRetry = Boolean(onRetryProfile && (acceptedBid.is_profile_loading || isFallbackName));
+
   return (
     <View style={styles.acceptedSection}>
       <View style={styles.alertSuccess}>
@@ -28,7 +35,7 @@ export function AcceptedProCard({
         <View style={{ flex: 1 }}>
           <Text style={styles.alertSuccessTitle}>Professional Assigned!</Text>
           <Text style={styles.alertSuccessText}>
-            {acceptedBid.is_profile_loading ? 'Service Provider' : acceptedBid.name.split(' ')[0]} is arriving in ~{acceptedBid.timeEstimate}.
+            {acceptedBid.is_profile_loading || isFallbackName ? 'Service Provider' : acceptedBid.name.split(' ')[0]} is arriving in ~{acceptedBid.timeEstimate}.
           </Text>
         </View>
       </View>
@@ -38,6 +45,17 @@ export function AcceptedProCard({
           <View style={[styles.proLargeAvatar, styles.skeletonBox]} />
           <View style={[styles.skeletonLine, { width: 140, height: 20, marginBottom: 8 }]} />
           <View style={[styles.skeletonLine, { width: 100, height: 14, marginBottom: 16 }]} />
+          {showRetry && (
+            <Pressable
+              style={{ paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#E5E7EB', borderRadius: 8, marginTop: 8 }}
+              onPress={onRetryProfile}
+              disabled={isRetryingProfile}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>
+                {isRetryingProfile ? 'Retrying...' : 'Retry Loading Profile'}
+              </Text>
+            </Pressable>
+          )}
         </View>
       ) : (
         <View style={styles.proProfileCard}>
@@ -59,6 +77,17 @@ export function AcceptedProCard({
               </Text>
             </View>
             <Text style={styles.tapToViewReviewsHint}>Tap profile to see reviews</Text>
+            {isFallbackName && showRetry && (
+              <Pressable
+                style={{ paddingVertical: 6, paddingHorizontal: 14, backgroundColor: '#FEF3C7', borderRadius: 8, marginTop: 8 }}
+                onPress={onRetryProfile}
+                disabled={isRetryingProfile}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#D97706' }}>
+                  {isRetryingProfile ? 'Retrying...' : '⚠️ Tap to retry loading profile'}
+                </Text>
+              </Pressable>
+            )}
           </Pressable>
 
           <View style={styles.proContactRow}>

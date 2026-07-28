@@ -117,6 +117,36 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
     }
   }, [bids, activeTask?.acceptedBid?.is_profile_loading]);
 
+  const [isRetryingProfile, setIsRetryingProfile] = useState(false);
+
+  const handleRetryProProfile = async () => {
+    const proId = Number(activeTask?.acceptedBid?.user_id);
+    if (!proId) return;
+    setIsRetryingProfile(true);
+    try {
+      const profile = await getCustomerProfile(proId);
+      const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
+      const avatar = profile.image ? (profile.image.startsWith('http') ? profile.image : `${process.env.EXPO_PUBLIC_API_URL}${profile.image}`) : '';
+      const updatedBid: Bid = {
+        ...activeTask!.acceptedBid!,
+        name: fullName || `Professional #${proId}`,
+        avatar: avatar || activeTask!.acceptedBid!.avatar,
+        rating: profile.overall_rating ?? activeTask!.acceptedBid!.rating,
+        phone_number: profile.phone_number || activeTask!.acceptedBid!.phone_number,
+        is_profile_loading: false,
+      };
+      contextAcceptBid(updatedBid.id, updatedBid);
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Profile loaded successfully!', ToastAndroid.SHORT);
+      }
+    } catch (err) {
+      console.warn('[ActiveTaskScreen] Retry profile failed:', err);
+      Alert.alert('Profile Error', 'Failed to fetch professional profile. Please try again.');
+    } finally {
+      setIsRetryingProfile(false);
+    }
+  };
+
   const [chatVisible, setChatVisible] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
@@ -382,6 +412,8 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
                 setSelectedProInfo({ id: proId, name });
                 setProReviewsVisible(true);
               }}
+              onRetryProfile={handleRetryProProfile}
+              isRetryingProfile={isRetryingProfile}
             />
           )}
         </ScrollView>

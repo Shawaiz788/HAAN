@@ -186,9 +186,11 @@ export default function HomeView({ userName }: HomeViewProps) {
 
   // Independent Location Sync from Profile / Backend Location API
   const [isLocationSyncing, setIsLocationSyncing] = useState(false);
+  const hasSyncedLocationIdRef = useRef(false);
 
   useEffect(() => {
-    if (!user?.location_id) return;
+    if (!user?.location_id || hasSyncedLocationIdRef.current) return;
+    hasSyncedLocationIdRef.current = true;
     let isMounted = true;
     setIsLocationSyncing(true);
 
@@ -205,13 +207,14 @@ export default function HomeView({ userName }: HomeViewProps) {
           if (webViewRef.current) {
             const jsCode = `
               if (typeof map !== 'undefined' && map) {
+                var currZoom = map.getZoom() || 15;
                 var targetLatLng = L.latLng(${lat}, ${lng});
-                var targetPoint = map.project(targetLatLng, 15);
+                var targetPoint = map.project(targetLatLng, currZoom);
                 var size = map.getSize();
                 var offset = L.point(0, size.y * (0.5 - 0.35));
                 var centerPoint = targetPoint.add(offset);
-                var centerLatLng = map.unproject(centerPoint, 15);
-                map.setView(centerLatLng, 15);
+                var centerLatLng = map.unproject(centerPoint, currZoom);
+                map.setView(centerLatLng, currZoom);
               }
               true;
             `;
@@ -304,7 +307,7 @@ export default function HomeView({ userName }: HomeViewProps) {
       {/* Interactive Leaflet Map Component */}
       <HomeMapView
         webViewRef={webViewRef}
-        initialCoords={mapCoords}
+        initialCoords={initialCoords}
         handleMapMessage={handleMapMessage}
         insets={insets}
         activeTask={activeTask}
