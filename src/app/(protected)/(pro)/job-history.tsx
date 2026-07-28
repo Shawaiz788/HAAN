@@ -229,14 +229,16 @@ const styles = StyleSheet.create({
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
+        gap: 8,
     },
     cardTitle: {
         fontSize: 15,
         fontWeight: '700',
         color: Colors.white,
         flex: 1,
-        marginRight: 8,
+        flexShrink: 1,
+        marginRight: 4,
     },
     statusBadge: {
         flexDirection: 'row',
@@ -244,6 +246,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 6,
+        alignSelf: 'flex-start',
+        flexShrink: 0,
     },
     statusText: {
         fontSize: 11,

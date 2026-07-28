@@ -161,18 +161,24 @@ const styles = StyleSheet.create({
   historyItemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 10,
+    gap: 8,
   },
   historyItemCategory: {
     fontSize: 16,
     fontWeight: '700',
     color: '#111827',
+    flex: 1,
+    flexShrink: 1,
+    marginRight: 4,
   },
   historyStatusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+    alignSelf: 'flex-start',
+    flexShrink: 0,
   },
   historyStatusText: {
     fontSize: 10,
