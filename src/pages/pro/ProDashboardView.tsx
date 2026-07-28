@@ -127,7 +127,7 @@ export default function ProDashboardView() {
             if (!user?.id) return;
             try {
                 const [, tasksRes] = await Promise.allSettled([
-                    fetchEarnings(user.id),
+                    fetchEarnings(user.id, true),
                     getWorkerTasksFromBackend(user.id),
                 ]);
 

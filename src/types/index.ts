@@ -116,6 +116,8 @@ export interface LiveJob {
   is_location_loading?: boolean;
   is_customer_loading?: boolean;
   payment_preference_id?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 // ─── Client Post Job & Bid Types ──────────────────────────────────────────────

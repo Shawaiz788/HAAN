@@ -2,6 +2,8 @@ import { fetchWithAuth, fetchWithTimeout, API_URL } from './fetchClient';
 import { Category, PaymentPreference, Status, BackendTask } from '@/types';
 import { TASK_STATUS } from '@/constants/taskStatus';
 import { logger } from '@/utils/logger';
+import { getOrCreateLocationChain } from './location';
+import { resolveLocationFromCoordinates } from './geofenceService';
 
 export { Category, PaymentPreference, Status };
 export type Task = BackendTask;
@@ -14,8 +16,12 @@ export interface TaskChainInput {
   description: string;
   budget: number;
   userId: number;
-  locationId: number;
+  locationId?: number;
+  latitude?: number;
+  longitude?: number;
+  formattedAddress?: string;
   attachmentUris?: string[] | null;
+  onProgress?: (step: string) => void;
 }
 
 // Fetch task attachments for a given taskId
@@ -134,11 +140,69 @@ export const createTask = async (task: Omit<Task, 'id'>): Promise<Task> => {
   }
 };
 
-// Sequential task creation chain: resolve IDs, create task, upload attachments
+// Sequential task creation chain: resolve location, create task, upload attachments
 export const createTaskChain = async (input: TaskChainInput): Promise<Task> => {
-  const { subcategoryId, categoryName, subcategoryName, paymentPreferenceId, description, budget, userId, locationId, attachmentUris } = input;
-  logger.log('[createTaskChain] Resolving task creation sequence with pre-resolved IDs...', input);
+  const {
+    subcategoryId,
+    categoryName,
+    subcategoryName,
+    paymentPreferenceId,
+    description,
+    budget,
+    userId,
+    locationId: passedLocationId,
+    latitude,
+    longitude,
+    formattedAddress,
+    attachmentUris,
+    onProgress,
+  } = input;
 
+  logger.log('[createTaskChain] Resolving task creation sequence...', input);
+
+  let finalLocationId: number | undefined = undefined;
+
+  // Step 1: Resolving & creating new location if coordinates are provided
+  if (latitude && longitude) {
+    onProgress?.('Resolving & creating task location...');
+    logger.log(`[createTaskChain] Resolving location for coordinates: lat=${latitude}, lng=${longitude}`);
+    try {
+      const resolved = resolveLocationFromCoordinates(latitude, longitude);
+      const newLoc = await getOrCreateLocationChain({
+        countryName: 'Pakistan',
+        cityName: resolved.cityName,
+        areaName: resolved.areaName,
+        resolvedCityId: resolved.cityId,
+        resolvedAreaId: resolved.areaId,
+        houseNumber: '1',
+        streetNumber: '1',
+        latitude,
+        longitude,
+        zipCode: '54000',
+        formatted_address: formattedAddress || `${resolved.areaName}, ${resolved.cityName}`,
+      });
+
+      logger.log('[createTaskChain] Location chain created response:', newLoc);
+      const createdLocId = newLoc?.id ?? (newLoc as any)?.location_id ?? (newLoc as any)?.pk;
+
+      if (createdLocId) {
+        finalLocationId = Number(createdLocId);
+        logger.log(`[createTaskChain] Successfully assigned newly created location ID: ${finalLocationId}`);
+      } else {
+        logger.warn('[createTaskChain] Location created but no ID key found in response:', newLoc);
+      }
+    } catch (locErr) {
+      logger.warn('[createTaskChain] Location auto-creation failed, falling back to passed/user locationId:', locErr);
+    }
+  }
+
+  if (!finalLocationId) {
+    finalLocationId = passedLocationId || 1;
+    logger.log(`[createTaskChain] Using fallback location ID: ${finalLocationId}`);
+  }
+
+  // Step 2: Create task on backend
+  onProgress?.('Creating task on server...');
   const subject = subcategoryName ? `${subcategoryName} (${categoryName})` : `${categoryName} Service Needed`;
   const preferredTime = new Date().toISOString();
 
@@ -148,7 +212,7 @@ export const createTaskChain = async (input: TaskChainInput): Promise<Task> => {
     price: budget,
     created_by: userId,
     preferred_time: preferredTime,
-    location_id: locationId,
+    location_id: finalLocationId,
     status_id: TASK_STATUS.OPEN,
     payment_preference_id: paymentPreferenceId,
     accurately_estimated: 0,
@@ -156,10 +220,12 @@ export const createTaskChain = async (input: TaskChainInput): Promise<Task> => {
   };
 
   const createdTask = await createTask(taskPayload);
-  logger.log(`[createTaskChain] Task created with ID: ${createdTask.id}. Now starting attachments upload...`);
+  logger.log(`[createTaskChain] Task created with ID: ${createdTask.id}. Now processing attachments...`);
 
+  // Step 3: Upload attachments if present
   let failedAttachmentCount = 0;
   if (attachmentUris && attachmentUris.length > 0 && createdTask.id) {
+    onProgress?.('Uploading attachments & pictures...');
     const uploadPromises = attachmentUris.map(async (uri) => {
       try {
         const uploadResultId = await uploadAttachment(uri, createdTask.id!);
@@ -176,6 +242,9 @@ export const createTaskChain = async (input: TaskChainInput): Promise<Task> => {
   if (failedAttachmentCount > 0) {
     createdTask._failedAttachmentCount = failedAttachmentCount;
   }
+
+  // Step 4: Finalizing & live bidding connection
+  onProgress?.('Connecting to live bidding network...');
 
   return createdTask;
 };

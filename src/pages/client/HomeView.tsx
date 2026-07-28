@@ -8,18 +8,11 @@ import {
   PanResponder,
   Keyboard,
   Platform,
-  ToastAndroid,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import * as ImagePicker from 'expo-image-picker';
-import NetInfo from '@react-native-community/netinfo';
-import { getPaymentPreferencesFromBackend, PaymentPreference } from '@/services/task';
-import useCategoryStore from '@/store/categoryStore';
 import { getLocationById } from '@/services/location';
-import { getCustomerReviews } from '@/services/user';
-import { initializeGeofenceService } from '@/services/geofenceService';
 import { useAuth } from '@/context/auth';
 import { usePostJob } from '@/context/post-job';
 import ActiveTaskScreen from '@/pages/client/ActiveTaskScreen';
@@ -29,16 +22,14 @@ import PinAdjusterModal from '@/components/client/PinAdjusterModal';
 import HomeMapView from '@/components/client/HomeMapView';
 import HomeBottomSheet from '@/components/client/HomeBottomSheet';
 import { useHomeViewLocation } from '@/hooks/useHomeViewLocation';
+import { useHomeViewTaskPost } from '@/hooks/useHomeViewTaskPost';
 import { styles } from '@/styles/homeView.styles';
-import { Pro } from '@/types';
 
 const { width, height } = Dimensions.get('window');
 
 const SHEET_HEIGHT = height * 0.8;
 const DEFAULT_HEIGHT = 420;
 const COLLAPSED_HEIGHT = 130;
-
-
 
 interface HomeViewProps {
   userName: string;
@@ -66,90 +57,57 @@ export default function HomeView({ userName }: HomeViewProps) {
     selectSearchResult, confirmAdjustedLocation, updateMapFromFields, handleMapMessage,
   } = useHomeViewLocation({ webViewRef });
 
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [viewActiveTaskScreen, setViewActiveTaskScreen] = useState(false);
+  const drawerAnim = useRef(new Animated.Value(-width * 0.75)).current;
+
+  // Custom Hook for Task Post State & Category Bootstrapping
+  const {
+    activeCategory,
+    setActiveCategory,
+    activeSubcategory,
+    setActiveSubcategory: handleSelectSubcategory,
+    budget,
+    setBudget,
+    description,
+    setDescription,
+    attachments,
+    categories,
+    loadingCategories,
+    paymentPreferences,
+    loadingPaymentPrefs,
+    selectedPaymentPrefId,
+    setSelectedPaymentPrefId,
+    isConnected,
+    isRetryingData,
+    hasMissingEssentialData,
+    minBasePrice,
+    handleSmartRetry,
+    handleAddAttachment,
+    handleRemoveAttachment,
+    handleRequestTask,
+  } = useHomeViewTaskPost({
+    user,
+    activeTask,
+    createTask,
+    mapCoords,
+    address,
+    isLocationAvailable,
+    setPinAdjusterVisible,
+    setViewActiveTaskScreen,
+  });
+
   // 3-state bottom sheet: 'collapsed', 'default', 'expanded'
   const [sheetState, setSheetState] = useState<'collapsed' | 'default' | 'expanded'>('default');
   const [lastNonDefaultState, setLastNonDefaultState] = useState<'collapsed' | 'expanded'>('expanded');
   const sheetTranslateY = useRef(new Animated.Value(SHEET_HEIGHT - DEFAULT_HEIGHT)).current;
 
-  // Ref to hold current state to prevent PanResponder stale closures
   const stateRef = useRef({ sheetState, lastNonDefaultState });
   stateRef.current = { sheetState, lastNonDefaultState };
 
-  // Bottom sheet categories toggle
   const [showAllCategories, setShowAllCategories] = useState(false);
-
-  // Shimmering Shared Animation
   const shimmerAnim = useRef(new Animated.Value(0.3)).current;
-
-  // Categories from shared Zustand store
-  const { categories, loading: loadingCategories, ensureCategories } = useCategoryStore();
-
-  // Dynamic Payment Preferences API State
-  const [paymentPreferences, setPaymentPreferences] = useState<PaymentPreference[]>([]);
-  const [loadingPaymentPrefs, setLoadingPaymentPrefs] = useState(true);
-  const [selectedPaymentPrefId, setSelectedPaymentPrefId] = useState<number | null>(null);
-
-  // Production-Ready NetInfo State
-  const [isConnected, setIsConnected] = useState(true);
-
-  // Smart Retry State
-  const [isRetryingData, setIsRetryingData] = useState(false);
-
-  const hasMissingEssentialData =
-    !loadingCategories &&
-    !loadingPaymentPrefs &&
-    (categories.length === 0 || paymentPreferences.length === 0);
-
-  const handleSmartRetry = async () => {
-    setIsRetryingData(true);
-    try {
-      const tasks: Promise<any>[] = [];
-
-      if (categories.length === 0) {
-        tasks.push(ensureCategories());
-      }
-
-      if (paymentPreferences.length === 0) {
-        tasks.push(
-          getPaymentPreferencesFromBackend().then((data) => {
-            const list = data || [];
-            setPaymentPreferences(list);
-            if (list.length > 0 && selectedPaymentPrefId === null) {
-              setSelectedPaymentPrefId(list[0].id);
-            }
-          })
-        );
-      }
-
-      await Promise.allSettled(tasks);
-
-      const { categories: updatedCats } = useCategoryStore.getState();
-      if (updatedCats.length > 0 && !activeCategory) {
-        setActiveCategory(updatedCats[0].name);
-      }
-    } catch (err) {
-      console.warn('[HomeView] Smart retry error:', err);
-    } finally {
-      setIsRetryingData(false);
-    }
-  };
-
-  // Form Inputs State
-  const [activeCategory, setActiveCategory] = useState<string>('');
-  const [activeSubcategory, setActiveSubcategory] = useState<string>('');
-  const [budget, setBudget] = useState('');
-  const [description, setDescription] = useState('');
-
-  // Form Attachments State
-  const [attachments, setAttachments] = useState<Array<{ id: string; uri: string; uploading: boolean }>>([]);
-
-  // Keyboard height state
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  // Navigation / Drawer / History Modals State
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [viewActiveTaskScreen, setViewActiveTaskScreen] = useState(false);
-  const drawerAnim = useRef(new Animated.Value(-width * 0.75)).current;
 
   const getTranslateYValue = (state: 'collapsed' | 'default' | 'expanded') => {
     switch (state) {
@@ -162,7 +120,6 @@ export default function HomeView({ userName }: HomeViewProps) {
     }
   };
 
-  // Animated swipe handling via PanResponder
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -227,66 +184,6 @@ export default function HomeView({ userName }: HomeViewProps) {
     return () => animation.stop();
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      setIsConnected(!!state.isConnected && state.isInternetReachable !== false);
-    });
-    NetInfo.fetch().then((state) => {
-      setIsConnected(!!state.isConnected && state.isInternetReachable !== false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Home Data Bootstrapper (Categories & Payment Prefs)
-  useEffect(() => {
-    let isMounted = true;
-
-    const bootstrapHomeData = async () => {
-      setLoadingPaymentPrefs(true);
-
-      const [catResult, paymentResult, geofenceResult] = await Promise.allSettled([
-        ensureCategories(),
-        getPaymentPreferencesFromBackend(),
-        initializeGeofenceService(),
-      ]);
-
-      if (!isMounted) return;
-
-      if (catResult.status === 'fulfilled') {
-        const { categories: cats } = useCategoryStore.getState();
-        if (cats.length > 0 && !activeCategory) {
-          setActiveCategory(cats[0].name);
-        }
-      }
-
-      if (paymentResult.status === 'fulfilled') {
-        const data = paymentResult.value || [];
-        setPaymentPreferences(data);
-        if (data.length > 0 && selectedPaymentPrefId === null) {
-          setSelectedPaymentPrefId(data[0].id);
-        }
-      } else {
-        setPaymentPreferences([]);
-      }
-      setLoadingPaymentPrefs(false);
-
-      // Background non-blocking pre-fetch of user reviews and ratings
-      if (user?.id) {
-        const fetchBackgroundReviews = async (userId: number) => {
-          try {
-            await getCustomerReviews(userId);
-          } catch (err) {
-            console.warn('[HomeView] Non-fatal background reviews prefetch error:', err);
-          }
-        };
-        fetchBackgroundReviews(user.id);
-      }
-    };
-
-    bootstrapHomeData();
-    return () => { isMounted = false; };
-  }, []);
-
   // Independent Location Sync from Profile / Backend Location API
   const [isLocationSyncing, setIsLocationSyncing] = useState(false);
 
@@ -305,7 +202,6 @@ export default function HomeView({ userName }: HomeViewProps) {
 
           setMapCoords(savedCoords);
 
-          // Update Leaflet map view
           if (webViewRef.current) {
             const jsCode = `
               if (typeof map !== 'undefined' && map) {
@@ -330,7 +226,7 @@ export default function HomeView({ userName }: HomeViewProps) {
         }
       })
       .catch((err) => {
-        console.log('[HomeView] Independent location fetch non-fatal error:', err);
+        // non-fatal
       })
       .finally(() => {
         if (isMounted) {
@@ -340,38 +236,6 @@ export default function HomeView({ userName }: HomeViewProps) {
 
     return () => { isMounted = false; };
   }, [user?.location_id]);
-
-  const handleAddAttachment = async () => {
-    const remaining = 3 - attachments.length;
-    if (remaining <= 0) {
-      Alert.alert('Limit Reached', 'You can upload a maximum of 3 attachments per task.');
-      return;
-    }
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission Denied', 'Camera roll access is required to attach photos.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: remaining,
-      allowsEditing: remaining === 1,
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const newItems = result.assets.slice(0, remaining).map((asset, idx) => ({
-        id: `${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
-        uri: asset.uri,
-        uploading: false,
-      }));
-      setAttachments(prev => [...prev, ...newItems]);
-    }
-  };
-
-  const handleRemoveAttachment = (id: string) => {
-    setAttachments(prev => prev.filter(item => item.id !== id));
-  };
 
   const handleSignOut = async () => {
     toggleDrawer(false);
@@ -435,145 +299,27 @@ export default function HomeView({ userName }: HomeViewProps) {
     }).start();
   };
 
-  const handleRequestTask = () => {
-    if (isLocationAvailable === false) {
-      if (Platform.OS === 'android') {
-        ToastAndroid.show('Services unavailable in selected location. Please adjust your pin.', ToastAndroid.LONG);
-      }
-      setTimeout(() => {
-        Alert.alert(
-          'Location Unavailable',
-          'Services are currently not available in your selected location. Please move your pin to a supported city/area.',
-          [{ text: 'Adjust Location', onPress: () => setPinAdjusterVisible(true) }]
-        );
-      }, 100);
-      return;
-    }
-
-    if (activeTask && (activeTask.status === 'searching' || activeTask.status === 'bidding' || activeTask.status === 'accepted')) {
-      Alert.alert(
-        'Active Request in Progress',
-        'You already have an active job request in progress. Please complete or cancel your existing task before creating a new one.',
-        [
-          { text: 'View Active Request', onPress: () => setViewActiveTaskScreen(true) },
-          { text: 'OK', style: 'cancel' },
-        ]
-      );
-      return;
-    }
-
-    const selectedCategoryObj = categories.find(c => c.name === activeCategory);
-    if (!selectedCategoryObj || !selectedCategoryObj.id) {
-      Alert.alert('Selection Required', 'Please select a valid category.');
-      return;
-    }
-
-    const getSubcategoriesByCategory = useCategoryStore.getState().getSubcategoriesByCategory;
-    const currentSubs = getSubcategoriesByCategory(selectedCategoryObj.id || selectedCategoryObj.name);
-
-    let selectedSubcategoryObj = currentSubs.find(s => s.name.toLowerCase() === activeSubcategory.toLowerCase());
-    if (!selectedSubcategoryObj && currentSubs.length > 0) {
-      selectedSubcategoryObj = currentSubs[0];
-    }
-
-    if (!selectedSubcategoryObj || !selectedSubcategoryObj.id) {
-      Alert.alert('Selection Required', 'Please select a specialty or subcategory.');
-      return;
-    }
-
-    const selectedPrefObj = paymentPreferences.find(p => p.id === selectedPaymentPrefId);
-    if (!selectedPrefObj) {
-      Alert.alert('Payment Selection Required', 'Please select a payment preference.');
-      return;
-    }
-
-    const userBudget = Number(budget);
-    if (!budget || isNaN(userBudget) || userBudget <= 0) {
-      Alert.alert('Invalid Budget', 'Please enter a valid price/budget.');
-      return;
-    }
-
-    const basePrice = Number(selectedSubcategoryObj.base_price ?? selectedSubcategoryObj.basePrice ?? 0);
-    if (basePrice > 0 && userBudget < basePrice) {
-      Alert.alert(
-        'Price Below Base Price',
-        `The budget for "${selectedSubcategoryObj.name}" cannot be lower than the base price of Rs. ${basePrice.toLocaleString()}.`,
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    if (description.trim().length < 5) {
-      Alert.alert('Details Required', 'Please describe the work in at least 5 characters.');
-      return;
-    }
-
-    const attachmentUris = attachments.map(item => item.uri);
-    createTask(
-      selectedSubcategoryObj.id,
-      selectedCategoryObj.name,
-      selectedSubcategoryObj.name,
-      selectedPrefObj.id,
-      selectedPrefObj.name,
-      description,
-      userBudget,
-      address,
-      attachmentUris
-    );
-    setViewActiveTaskScreen(true);
-    setBudget('');
-    setDescription('');
-    setAttachments([]);
-  };
-
-  const handleSelectSubcategory = (subName: string, subObj?: any) => {
-    setActiveSubcategory(subName);
-    let resolvedSub = subObj;
-
-    if (!resolvedSub && subName && activeCategory) {
-      const selectedCat = categories.find(c => c.name === activeCategory);
-      if (selectedCat) {
-        const getSubcategoriesByCategory = useCategoryStore.getState().getSubcategoriesByCategory;
-        const currentSubs = getSubcategoriesByCategory(selectedCat.id || selectedCat.name);
-        resolvedSub = currentSubs.find(s => s.name.toLowerCase() === subName.toLowerCase());
-      }
-    }
-
-    if (resolvedSub) {
-      const baseP = Number(resolvedSub.base_price ?? resolvedSub.basePrice ?? 0);
-      if (baseP > 0) {
-        setBudget(String(baseP));
-      }
-    }
-  };
-
-  const getSubcategoriesByCategory = useCategoryStore((state) => state.getSubcategoriesByCategory);
-  const activeCatObj = categories.find(c => c.name === activeCategory);
-  const activeSubs = activeCatObj ? getSubcategoriesByCategory(activeCatObj.id || activeCatObj.name) : [];
-  const activeSubObj = activeSubs.find(s => s.name.toLowerCase() === activeSubcategory.toLowerCase()) || (activeSubs.length > 0 ? activeSubs[0] : null);
-  const minBasePrice = Number(activeSubObj?.base_price ?? activeSubObj?.basePrice ?? 0);
-
   return (
     <View style={styles.container}>
+      {/* Interactive Leaflet Map Component */}
       <HomeMapView
-        loadingLocation={loadingLocation}
-        isGeocoding={isGeocoding}
-        isLocationSyncing={isLocationSyncing}
-        isLocationAvailable={isLocationAvailable}
-        initialCoords={initialCoords}
         webViewRef={webViewRef}
+        initialCoords={mapCoords}
         handleMapMessage={handleMapMessage}
-        isConnected={isConnected}
         insets={insets}
-        toggleDrawer={toggleDrawer}
-        locateBtnStyle={locateBtnStyle}
-        reCenterMap={reCenterMap}
         activeTask={activeTask}
         viewActiveTaskScreen={viewActiveTaskScreen}
         activeTaskBannerStyle={activeTaskBannerStyle}
         setViewActiveTaskScreen={setViewActiveTaskScreen}
+        toggleDrawer={toggleDrawer}
+        locateBtnStyle={locateBtnStyle}
+        reCenterMap={reCenterMap}
+        loadingLocation={loadingLocation || isLocationSyncing}
+        isGeocoding={isGeocoding}
+        isConnected={isConnected}
       />
 
+      {/* Persistent 3-State Sliding Bottom Sheet */}
       <HomeBottomSheet
         bottomSheetStyle={bottomSheetStyle}
         panResponder={panResponder}
@@ -588,7 +334,7 @@ export default function HomeView({ userName }: HomeViewProps) {
         activeCategory={activeCategory}
         setActiveCategory={(cat) => {
           setActiveCategory(cat);
-          setActiveSubcategory('');
+          handleSelectSubcategory('');
         }}
         activeSubcategory={activeSubcategory}
         setActiveSubcategory={handleSelectSubcategory}

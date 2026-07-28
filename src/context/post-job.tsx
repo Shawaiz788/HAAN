@@ -31,7 +31,9 @@ interface PostJobContextType {
     description: string,
     budget: number,
     locationName: string,
-    attachmentUris?: string[] | null
+    attachmentUris?: string[] | null,
+    latitude?: number,
+    longitude?: number
   ) => void;
   cancelTask: (onProgress?: (msg: string) => void) => Promise<boolean>;
   acceptBid: (bidId: string, bidObj?: Bid) => void;
@@ -186,7 +188,9 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
     description: string,
     budget: number,
     locationName: string,
-    attachmentUris?: string[] | null
+    attachmentUris?: string[] | null,
+    latitude?: number,
+    longitude?: number
   ) => {
     if (activeTask && (activeTask.status === 'searching' || activeTask.status === 'bidding' || activeTask.status === 'accepted')) {
       logger.warn('[PostJobProvider] Blocked creating second task: active task already in progress.');
@@ -212,18 +216,14 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
     setBids([]);
     setActiveChatMessages([]);
     setIsCreatingTask(true);
-    setCreationStep('Creating task on server...');
+    setCreationStep(latitude && longitude ? 'Resolving & creating task location...' : 'Creating task on server...');
 
     const userId = user?.id;
-    const locationId = user?.location_id || user?.location?.id || 1;
+    const defaultLocationId = user?.location_id || user?.location?.id || 1;
 
     if (userId) {
       (async () => {
         try {
-          if (attachmentUris && attachmentUris.length > 0) {
-            setCreationStep('Uploading attachments & pictures...');
-          }
-
           const createdBackend = await createTaskChain({
             subcategoryId,
             categoryName,
@@ -232,8 +232,12 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
             description,
             budget,
             userId,
-            locationId,
+            locationId: defaultLocationId,
+            latitude,
+            longitude,
+            formattedAddress: locationName,
             attachmentUris,
+            onProgress: (stepMsg) => setCreationStep(stepMsg),
           });
           logger.log('[PostJobProvider] Backend task created successfully. ID:', createdBackend.id);
 

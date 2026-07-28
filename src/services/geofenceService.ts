@@ -414,3 +414,32 @@ export const validateLocationServiceability = (
   }
   return { isAvailable: false, message: 'Services Not Available in this area' };
 };
+
+export interface ResolvedCoordinatesLocation {
+  cityName: string;
+  areaName: string;
+  cityId?: number;
+  areaId?: number;
+}
+
+/**
+ * Resolves city and area details for given coordinates using geofence polygon mapping.
+ */
+export const resolveLocationFromCoordinates = (
+  lat: number,
+  lng: number
+): ResolvedCoordinatesLocation => {
+  const result = validateCoordinatesServiceability(lat, lng);
+  const cityName = result.matchedCityName || 'Lahore';
+  const areaName = result.matchedAreaName || 'Gulberg';
+  const cityId = result.matchedCityObj?.id;
+  const areaId = result.matchedAreaObj?.id;
+
+  return {
+    cityName,
+    areaName,
+    cityId,
+    areaId,
+  };
+};
+

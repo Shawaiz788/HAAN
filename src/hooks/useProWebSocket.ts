@@ -8,6 +8,7 @@ import { LiveJob } from '@/types';
 import useCategoryStore from '@/store/categoryStore';
 import { logger } from '@/utils/logger';
 import { showNewTaskNotification } from '@/services/notificationService';
+import { calculateDistanceKm } from '@/utils/distanceUtils';
 
 export { LiveJob };
 
@@ -49,6 +50,7 @@ interface UseProWebSocketOptions {
     userId?: number | undefined;
     isOnline: boolean;
     onTaskCancelledForWorker?: (taskId: number, workerId: number) => void;
+    proLocation?: { latitude: number; longitude: number } | null;
 }
 
 interface UseProWebSocketResult {
@@ -122,6 +124,8 @@ async function enrichJobDetailsGlobal(
     let updatedCustomerImage: string | undefined = undefined;
     let updatedCustomerRating: number | undefined = undefined;
     let updatedLocationName: string | undefined = undefined;
+    let updatedLatitude: number | undefined = undefined;
+    let updatedLongitude: number | undefined = undefined;
 
     if (profileResult.status === 'fulfilled' && profileResult.value) {
         const profile = profileResult.value;
@@ -135,6 +139,10 @@ async function enrichJobDetailsGlobal(
     if (locationResult.status === 'fulfilled' && locationResult.value) {
         const loc = locationResult.value;
         updatedLocationName = loc.formatted_address || 'Unknown Location';
+        if (loc.latitude !== undefined && loc.longitude !== undefined) {
+            updatedLatitude = Number(loc.latitude);
+            updatedLongitude = Number(loc.longitude);
+        }
     }
 
     globalJobs = globalJobs.map((j) => {
@@ -148,6 +156,8 @@ async function enrichJobDetailsGlobal(
             is_customer_loading: false,
             location_name: updatedLocationName ?? (locationId ? 'Location not found' : j.location_name),
             is_location_loading: false,
+            latitude: updatedLatitude ?? j.latitude,
+            longitude: updatedLongitude ?? j.longitude,
         };
     });
     notifyListeners();
@@ -198,7 +208,6 @@ function connectGlobalSocket() {
                 const t = msg.task;
                 const { getStyleById, getCategoryAndSubcategoryBySubId } = useCategoryStore.getState();
 
-                // ALWAYS trigger push notification immediately!
                 showNewTaskNotification({
                     id: t.id,
                     subject: t.subject,
@@ -248,83 +257,52 @@ function connectGlobalSocket() {
                     globalJobs = globalJobs.filter((j) => Number(j.id) !== Number(closedTaskId));
                     notifyListeners();
 
-                    if (
-                        msg.type === 'task_deleted' &&
-                        msgWorkerId &&
-                        globalUserId &&
-                        String(msgWorkerId) === String(globalUserId)
-                    ) {
-                        logger.log(`[useProWebSocket] Task ${closedTaskId} assigned to worker ${globalUserId} was cancelled by customer.`);
-                        if (Platform.OS === 'android') {
-                            ToastAndroid.show('A task assigned to you was cancelled by the customer.', ToastAndroid.LONG);
-                        } else {
-                            Alert.alert('Task Cancelled', 'A task assigned to you was cancelled by the customer.');
-                        }
-                        globalOnTaskCancelled?.(Number(closedTaskId), Number(msgWorkerId));
+                    if (msgWorkerId && globalOnTaskCancelled) {
+                        globalOnTaskCancelled(Number(closedTaskId), Number(msgWorkerId));
                     }
                 }
             }
         } catch (e) {
-            logger.warn('[useProWebSocket] Failed to parse message:', e);
+            logger.error('[useProWebSocket] Error parsing global WebSocket message:', e);
         }
     };
 
-    ws.onerror = (error) => {
-        logger.error('[useProWebSocket] Global WebSocket error:', error);
+    ws.onerror = (e) => {
+        logger.error('[useProWebSocket] Global WebSocket Error:', e);
     };
 
-    ws.onclose = (event) => {
+    ws.onclose = () => {
+        logger.warn('[useProWebSocket] Global socket closed');
         globalWs = null;
-        logger.warn(`[useProWebSocket] Global WebSocket DISCONNECTED. Code: ${event.code}, Reason: ${event.reason || 'No reason provided'}, WasClean: ${event.wasClean}`);
-
-        if (!globalShouldConnect) {
-            globalWsStatus = 'disconnected';
-            notifyListeners();
-            return;
-        }
+        if (!globalShouldConnect) return;
 
         globalWsStatus = 'reconnecting';
         notifyListeners();
-        const delay = globalRetryDelay;
-        globalRetryDelay = Math.min(delay * 2, MAX_RETRY_DELAY_MS);
-        logger.warn(`[useProWebSocket] Global socket disconnected unexpectedly. Reconnecting in ${delay}ms...`);
+
         clearGlobalRetryTimer();
         globalRetryTimer = setTimeout(() => {
-            if (globalShouldConnect) connectGlobalSocket();
-        }, delay);
+            logger.log(`[useProWebSocket] Attempting reconnect in ${globalRetryDelay}ms...`);
+            connectGlobalSocket();
+            globalRetryDelay = Math.min(globalRetryDelay * 2, MAX_RETRY_DELAY_MS);
+        }, globalRetryDelay);
     };
 }
 
 async function fetchOpenJobsGlobal() {
-    if (!globalShouldConnect) return;
-    logger.log('[useProWebSocket] Fetching open jobs from /app/task/open/ API...');
     try {
-        await useCategoryStore.getState().ensureCategories();
         const openTasks = await getOpenTasksFromBackend();
-        if (!globalShouldConnect) return;
-
-        logger.log(`[useProWebSocket] Fetched ${openTasks.length} open tasks from backend.`);
-
-        if (openTasks.length === 0) {
-            globalJobs = [];
-            globalHasNoJobs = true;
-            notifyListeners();
-            return;
-        }
-
-        globalHasNoJobs = false;
         const { getStyleById, getCategoryAndSubcategoryBySubId } = useCategoryStore.getState();
 
-        const initialJobs: LiveJob[] = openTasks.map((t) => {
-            const subId = t.subcategory_id || (t as any).category_id || 0;
+        const formattedJobs: LiveJob[] = openTasks.map((t) => {
+            const subId = t.subcategory_id || 0;
             const { category: cat, subcategory: sub } = getCategoryAndSubcategoryBySubId(subId);
             const { icon: catIcon, color: catColor } = getStyleById(cat?.id || subId);
 
             return {
                 id: t.id!,
-                title: t.subject || 'New Task',
+                title: t.subject || 'Open Task',
                 description: t.body || '',
-                category: cat?.name ?? ((t as any).category_id ? `Category ${(t as any).category_id}` : 'Service'),
+                category: cat?.name ?? 'Service',
                 subcategory: sub?.name ?? '',
                 subcategory_id: subId,
                 category_icon: catIcon,
@@ -341,12 +319,10 @@ async function fetchOpenJobsGlobal() {
             };
         });
 
-        const fetchedIds = new Set(initialJobs.map((j) => Number(j.id)));
-        const extraWsJobs = globalJobs.filter((j) => !fetchedIds.has(Number(j.id)));
-        globalJobs = [...extraWsJobs, ...initialJobs];
+        globalJobs = formattedJobs;
+        globalHasNoJobs = formattedJobs.length === 0;
         notifyListeners();
 
-        // Concurrently enrich details (customer profile and location)
         await Promise.allSettled(
             openTasks.map(async (t) => {
                 if (!t.id) return;
@@ -379,6 +355,7 @@ export function useProWebSocket({
     userId: passedUserId,
     isOnline,
     onTaskCancelledForWorker,
+    proLocation,
 }: UseProWebSocketOptions): UseProWebSocketResult {
     const { user } = useAuth();
     const userId = passedUserId ?? user?.id;
@@ -425,8 +402,21 @@ export function useProWebSocket({
         await fetchOpenJobsGlobal();
     }, []);
 
+    const jobsWithDistance = globalJobs.map((job) => {
+        if (proLocation && job.latitude !== undefined && job.longitude !== undefined) {
+            const dist = calculateDistanceKm(
+                proLocation.latitude,
+                proLocation.longitude,
+                job.latitude,
+                job.longitude
+            );
+            return { ...job, distance_km: dist };
+        }
+        return job;
+    });
+
     return {
-        jobs: globalJobs,
+        jobs: jobsWithDistance,
         wsStatus: globalWsStatus,
         hasNoJobs: globalHasNoJobs,
         refresh,

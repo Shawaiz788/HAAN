@@ -36,11 +36,8 @@ export const createLocation = async (location: UserLocation): Promise<UserLocati
 };
 
 export const getLocationById = async (id: number): Promise<UserLocation> => {
-  // console.log(`[getLocationById API] Fetching location details for ID: ${id}`);
   const response = await fetchWithTimeout(`${API_URL}/app/location/${id}/`);
   const responseText = await response.text();
-  // console.log('[getLocationById API] Response Status:', response.status);
-  //console.log('[getLocationById API] Response Body:', responseText);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch location by ID. Status: ${response.status}. Response: ${responseText}`);
@@ -96,7 +93,10 @@ export const getOrCreateLocationChain = async (input: LocationChainInput): Promi
     const cleanLat = latitude ? Number(latitude.toFixed(6)) : undefined;
     const cleanLng = longitude ? Number(longitude.toFixed(6)) : undefined;
 
-    const locationPayload: UserLocation = {
+    const locationPayload: any = {
+      country: countryId,
+      city: input.resolvedCityId,
+      area: input.resolvedAreaId,
       country_id: countryId,
       city_id: input.resolvedCityId,
       area_id: input.resolvedAreaId,
@@ -113,7 +113,6 @@ export const getOrCreateLocationChain = async (input: LocationChainInput): Promi
   }
 
   // ── Slow path: resolve IDs from API ─────────────────────────────────────────
-  // Fetch all reference data in parallel — they are independent of each other
   const [countries, cities, areas] = await Promise.all([
     getCountries(),
     getCities(),
@@ -133,12 +132,9 @@ export const getOrCreateLocationChain = async (input: LocationChainInput): Promi
   );
   if (existingCountry) {
     countryId = existingCountry.id;
-    console.log('[LocationChain] Country exists with ID:', countryId);
   } else {
-    console.log('[LocationChain] Country does not exist, creating:', countryName);
     const newCountry = await createCountry(countryName);
     countryId = newCountry.id;
-    console.log('[LocationChain] Country created with ID:', countryId);
   }
 
   // 2. Resolve City
@@ -147,24 +143,20 @@ export const getOrCreateLocationChain = async (input: LocationChainInput): Promi
     (c: any) => {
       const matchName = c.name.toLowerCase() === cityName.toLowerCase();
       if (!matchName) return false;
-      // c.country can be a plain number ID or an object
       const cId =
         c.country === null || c.country === undefined
           ? null
           : typeof c.country === 'object'
             ? c.country?.id
-            : c.country; // plain number
+            : c.country;
       return !cId || cId === countryId;
     }
   );
   if (existingCity) {
     cityId = existingCity.id;
-    console.log('[LocationChain] City exists with ID:', cityId);
   } else {
-    console.log('[LocationChain] City does not exist, creating:', cityName);
     const newCity = await createCity(countryId, cityName);
     cityId = newCity.id;
-    console.log('[LocationChain] City created with ID:', cityId);
   }
 
   // 3. Resolve Area
@@ -173,31 +165,30 @@ export const getOrCreateLocationChain = async (input: LocationChainInput): Promi
     (a: any) => {
       const matchName = a.name.toLowerCase() === areaName.toLowerCase();
       if (!matchName) return false;
-      // a.city can be a plain number ID or an object
       const cId =
         a.city === null || a.city === undefined
           ? null
           : typeof a.city === 'object'
             ? a.city?.id
-            : a.city; // plain number
+            : a.city;
       return !cId || cId === cityId;
     }
   );
   if (existingArea) {
     areaId = existingArea.id;
-    console.log('[LocationChain] Area exists with ID:', areaId);
   } else {
-    console.log('[LocationChain] Area does not exist, creating:', areaName);
     const newArea = await createArea(cityId, areaName);
     areaId = newArea.id;
-    console.log('[LocationChain] Area created with ID:', areaId);
   }
 
   // 4. Create User Location
   const cleanLat = latitude ? Number(latitude.toFixed(6)) : undefined;
   const cleanLng = longitude ? Number(longitude.toFixed(6)) : undefined;
 
-  const locationPayload: UserLocation = {
+  const locationPayload: any = {
+    country: countryId,
+    city: cityId,
+    area: areaId,
     country_id: countryId,
     city_id: cityId,
     area_id: areaId,
@@ -209,6 +200,6 @@ export const getOrCreateLocationChain = async (input: LocationChainInput): Promi
     formatted_address,
   };
 
-  console.log('[LocationChain] Creating Location with payload:', locationPayload);
+  logger.log('[LocationChain] Creating Location with payload:', locationPayload);
   return await createLocation(locationPayload);
 };
