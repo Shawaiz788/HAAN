@@ -2,7 +2,8 @@ import { StyleSheet, Dimensions } from 'react-native';
 import { Colors } from '@/constants/colors';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const FULL_H = SCREEN_HEIGHT * 0.92;
+const { height: SCREEN_H_SCREEN } = Dimensions.get('screen');
+const FULL_H = Math.max(SCREEN_HEIGHT, SCREEN_H_SCREEN);
 
 export const styles = StyleSheet.create({
     scrim: {

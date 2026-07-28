@@ -1,44 +1,39 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View,
-    Text,
     StyleSheet,
     Pressable,
-    TouchableOpacity,
     Animated,
     PanResponder,
     Dimensions,
     ScrollView,
-    TextInput,
     Alert,
     ToastAndroid,
     Platform,
     Keyboard,
-    Image,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 import { LiveJob } from '@/hooks/useProWebSocket';
 import { useBiddingWebSocket } from '@/hooks/useBiddingWebSocket';
 import { useAuth } from '@/context/auth';
-import { getCategoryStyle } from '@/store/categoryStore';
 import { getTaskAttachments } from '@/services/task';
 import UserReviewsModal from '@/components/UserReviewsModal';
-import { getPaymentPrefStyleById } from '@/store/paymentStore';
 import { styles } from '@/styles/jobDetailBottomSheet.styles';
 import { getNormalizedAttachments } from '@/utils/attachmentUtils';
 import { ImagePreviewOverlay } from '@/components/pro/ImagePreviewOverlay';
 import { ActiveBidState } from '@/hooks/useActiveBids';
 import { logger } from '@/utils/logger';
 
+import { JobDetailHeaderSection } from './jobDetailBottomSheet/JobDetailHeaderSection';
+import { JobDetailDescriptionSection } from './jobDetailBottomSheet/JobDetailDescriptionSection';
+import { JobDetailBiddingSection, BidOption } from './jobDetailBottomSheet/JobDetailBiddingSection';
+
 const { height: WINDOW_H } = Dimensions.get('window');
 const { height: SCREEN_H_SCREEN } = Dimensions.get('screen');
 const SCREEN_H = Math.max(WINDOW_H, SCREEN_H_SCREEN);
 const HALF_H = SCREEN_H * 0.58;
 const CLOSED_Y = SCREEN_H;
-
-type BidOption = 'plus5' | 'plus10' | 'plus15' | 'custom' | null;
 
 interface JobDetailBottomSheetProps {
     job: LiveJob | null;
@@ -49,29 +44,6 @@ interface JobDetailBottomSheetProps {
     onPlaceBid?: (job: LiveJob, amount: number) => void;
     hasActiveTask?: boolean;
 }
-
-const SkeletonBox = ({ width, height, borderRadius = 4, style }: any) => {
-    const anim = useRef(new Animated.Value(0.3)).current;
-    useEffect(() => {
-        const loop = Animated.loop(
-            Animated.sequence([
-                Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
-                Animated.timing(anim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-            ])
-        );
-        loop.start();
-        return () => loop.stop();
-    }, [anim]);
-
-    return (
-        <Animated.View
-            style={[
-                { width, height, borderRadius, backgroundColor: '#E2E8F0', opacity: anim },
-                style,
-            ]}
-        />
-    );
-};
 
 export default function JobDetailBottomSheet({
     job,
@@ -86,37 +58,42 @@ export default function JobDetailBottomSheet({
     const { user } = useAuth();
     const [selectedBid, setSelectedBid] = useState<BidOption>(null);
     const [customAmount, setCustomAmount] = useState('');
-    const [sheetState, setSheetState] = useState<'closed' | 'half' | 'expanded'>('closed');
+    const [sheetState, setSheetState] = useState<'default' | 'expanded'>('default');
     const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [localVisible, setLocalVisible] = useState(false);
 
     const [isWaiting, setIsWaiting] = useState(false);
     const [bidAmountPlaced, setBidAmountPlaced] = useState<number | null>(null);
     const [countdown, setCountdown] = useState(60);
     const [customerReviewsVisible, setCustomerReviewsVisible] = useState(false);
     const [localAttachments, setLocalAttachments] = useState<any[]>(job?.attachments || []);
+    const [isAttachmentsLoading, setIsAttachmentsLoading] = useState(false);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
     const translateY = useRef(new Animated.Value(CLOSED_Y)).current;
+    const currentY = useRef(CLOSED_Y);
     const progressAnim = useRef(new Animated.Value(0)).current;
 
     const activeBidForThisJob = (passedActiveBid && job && passedActiveBid.jobId === job.id) ? passedActiveBid : null;
 
     useEffect(() => {
-        if (job) {
+        if (isVisible && job?.id) {
             setLocalAttachments(job.attachments || []);
-            if (job.id) {
-                getTaskAttachments(job.id)
-                    .then((fetched) => {
-                        if (Array.isArray(fetched) && fetched.length > 0) {
-                            setLocalAttachments(fetched);
-                        }
-                    })
-                    .catch((err) => {
-                        logger.warn('[JobDetailBottomSheet] Failed to load attachments:', err);
-                    });
-            }
+            setIsAttachmentsLoading(true);
+            getTaskAttachments(job.id)
+                .then((fetched) => {
+                    if (Array.isArray(fetched) && fetched.length > 0) {
+                        setLocalAttachments(fetched);
+                    }
+                })
+                .catch((err) => {
+                    logger.warn('[JobDetailBottomSheet] Failed to load attachments:', err);
+                })
+                .finally(() => {
+                    setIsAttachmentsLoading(false);
+                });
         }
-    }, [job]);
+    }, [isVisible, job?.id]);
 
     useEffect(() => {
         if (activeBidForThisJob) {
@@ -126,7 +103,16 @@ export default function JobDetailBottomSheet({
             const totalSec = Math.floor(activeBidForThisJob.durationMs / 1000);
             const remaining = Math.max(0, totalSec - elapsedSec);
             setCountdown(remaining);
-            progressAnim.setValue(totalSec > 0 ? elapsedSec / totalSec : 0);
+            progressAnim.setValue(totalSec > 0 ? (totalSec - elapsedSec) / totalSec : 0);
+
+            const interval = setInterval(() => {
+                const curElapsed = Math.floor((Date.now() - activeBidForThisJob.startTimeMs) / 1000);
+                const rem = Math.max(0, totalSec - curElapsed);
+                setCountdown(rem);
+                if (rem <= 0) clearInterval(interval);
+            }, 1000);
+
+            return () => clearInterval(interval);
         } else {
             setIsWaiting(false);
             setBidAmountPlaced(null);
@@ -160,77 +146,137 @@ export default function JobDetailBottomSheet({
     });
 
     useEffect(() => {
-        const showSub = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-            (e) => {
-                setKeyboardHeight(e.endCoordinates.height);
-            }
-        );
-        const hideSub = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-            () => {
-                setKeyboardHeight(0);
-            }
-        );
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+        const showSub = Keyboard.addListener(showEvent, (e) => {
+            setKeyboardHeight(e.endCoordinates.height);
+        });
+        const hideSub = Keyboard.addListener(hideEvent, () => {
+            setKeyboardHeight(0);
+        });
+
         return () => {
             showSub.remove();
             hideSub.remove();
         };
     }, []);
 
-    const animateTo = useCallback(
-        (targetY: number, toState: 'closed' | 'half' | 'expanded') => {
-            Animated.spring(translateY, {
-                toValue: targetY,
-                useNativeDriver: false,
-                bounciness: 4,
-                speed: 14,
-            }).start(() => {
-                setSheetState(toState);
-                if (toState === 'closed') {
-                    onClose();
-                }
-            });
-        },
-        [translateY, onClose]
-    );
-
     useEffect(() => {
-        if (isVisible) {
+        if (isVisible && job) {
             setSelectedBid(null);
             setCustomAmount('');
-            animateTo(SCREEN_H - HALF_H, 'half');
+            setSheetState('default');
+            setLocalVisible(true);
+
+            Animated.spring(translateY, {
+                toValue: SCREEN_H - HALF_H,
+                useNativeDriver: true,
+                tension: 50,
+                friction: 10,
+            }).start();
+            currentY.current = SCREEN_H - HALF_H;
         } else {
-            animateTo(CLOSED_Y, 'closed');
+            Animated.spring(translateY, {
+                toValue: SCREEN_H,
+                useNativeDriver: true,
+                tension: 50,
+                friction: 10,
+            }).start(({ finished }) => {
+                if (finished) {
+                    setLocalVisible(false);
+                }
+            });
+            currentY.current = SCREEN_H;
         }
-    }, [isVisible]);
+    }, [isVisible, job]);
 
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
-            onPanResponderMove: (_, gestureState) => {
-                const currentBase = sheetState === 'expanded' ? 0 : SCREEN_H - HALF_H;
-                const newY = currentBase + gestureState.dy;
-                if (newY >= 0) {
-                    translateY.setValue(newY);
-                }
+            onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
+            onPanResponderGrant: () => {
+                translateY.stopAnimation((val) => {
+                    currentY.current = val;
+                });
             },
-            onPanResponderRelease: (_, gestureState) => {
-                const { dy, vy } = gestureState;
-                if (sheetState === 'half') {
-                    if (dy < -80 || vy < -0.5) {
-                        animateTo(0, 'expanded');
-                    } else if (dy > 80 || vy > 0.5) {
-                        animateTo(CLOSED_Y, 'closed');
+            onPanResponderMove: (_, g) => {
+                const newY = Math.max(0, currentY.current + g.dy);
+                translateY.setValue(newY);
+            },
+            onPanResponderRelease: (_, g) => {
+                const cur = currentY.current + g.dy;
+                const isSwipeDown = g.dy > 50 || g.vy > 0.4;
+                const isSwipeUp = g.dy < -50 || g.vy < -0.4;
+
+                if (isSwipeDown) {
+                    if (cur > (SCREEN_H - HALF_H) + 60) {
+                        Animated.spring(translateY, {
+                            toValue: SCREEN_H,
+                            useNativeDriver: true,
+                            tension: 50,
+                            friction: 10,
+                        }).start(({ finished }) => {
+                            if (finished) {
+                                onClose();
+                                setLocalVisible(false);
+                            }
+                        });
+                        currentY.current = SCREEN_H;
                     } else {
-                        animateTo(SCREEN_H - HALF_H, 'half');
+                        Animated.spring(translateY, {
+                            toValue: SCREEN_H - HALF_H,
+                            useNativeDriver: true,
+                            tension: 50,
+                            friction: 10,
+                        }).start();
+                        currentY.current = SCREEN_H - HALF_H;
+                        setSheetState('default');
                     }
-                } else if (sheetState === 'expanded') {
-                    if (dy > 100 || vy > 0.5) {
-                        animateTo(SCREEN_H - HALF_H, 'half');
+                } else if (isSwipeUp) {
+                    Animated.spring(translateY, {
+                        toValue: 0,
+                        useNativeDriver: true,
+                        tension: 50,
+                        friction: 10,
+                    }).start();
+                    currentY.current = 0;
+                    setSheetState('expanded');
+                } else {
+                    const snapFull = Math.abs(cur - 0);
+                    const snapHalf = Math.abs(cur - (SCREEN_H - HALF_H));
+                    const snapClose = Math.abs(cur - SCREEN_H);
+                    if (snapFull < snapHalf && snapFull < snapClose) {
+                        Animated.spring(translateY, {
+                            toValue: 0,
+                            useNativeDriver: true,
+                            tension: 50,
+                            friction: 10,
+                        }).start();
+                        currentY.current = 0;
+                        setSheetState('expanded');
+                    } else if (snapClose < snapHalf) {
+                        Animated.spring(translateY, {
+                            toValue: SCREEN_H,
+                            useNativeDriver: true,
+                            tension: 50,
+                            friction: 10,
+                        }).start(({ finished }) => {
+                            if (finished) {
+                                onClose();
+                                setLocalVisible(false);
+                            }
+                        });
+                        currentY.current = SCREEN_H;
                     } else {
-                        animateTo(0, 'expanded');
+                        Animated.spring(translateY, {
+                            toValue: SCREEN_H - HALF_H,
+                            useNativeDriver: true,
+                            tension: 50,
+                            friction: 10,
+                        }).start();
+                        currentY.current = SCREEN_H - HALF_H;
+                        setSheetState('default');
                     }
                 }
             },
@@ -258,30 +304,50 @@ export default function JobDetailBottomSheet({
         if (hasActiveTask) {
             Alert.alert(
                 'Active Job in Progress',
-                'You already have an accepted job in progress. Complete your active job before bidding on new tasks.',
+                'You already have an active job in progress! Please complete your current job before bidding on another task.',
                 [{ text: 'OK' }]
             );
             return;
         }
 
         wsPlaceBid(computedBidAmount, 1);
+        if (Platform.OS === 'android') {
+            ToastAndroid.show(`Placed bid of Rs.${computedBidAmount.toLocaleString()}`, ToastAndroid.SHORT);
+        }
+        Keyboard.dismiss();
         if (onPlaceBid) {
             onPlaceBid(job, computedBidAmount);
         }
     };
 
-    if (!isVisible && sheetState === 'closed') return null;
+    const handleSelectBid = (opt: BidOption) => {
+        setSelectedBid(opt);
+        if (opt === 'plus5') setCustomAmount(plus5.toString());
+        else if (opt === 'plus10') setCustomAmount(plus10.toString());
+        else if (opt === 'plus15') setCustomAmount(plus15.toString());
+        else if (opt === null) setCustomAmount('');
+    };
 
-    const categoryIcon = getCategoryStyle(job?.category ?? '');
+    const handleChangeCustomAmount = (t: string) => {
+        if (isWaiting) return;
+        const clean = t.replace(/[^0-9]/g, '');
+        setCustomAmount(clean);
+        if (clean === '') {
+            setSelectedBid(null);
+        } else {
+            setSelectedBid('custom');
+        }
+    };
+
+    if (!localVisible) return null;
 
     const scrimOpacity = translateY.interpolate({
-        inputRange: [0, SCREEN_H - HALF_H, CLOSED_Y],
+        inputRange: [0, SCREEN_H - HALF_H, SCREEN_H],
         outputRange: [1, 0.8, 0],
         extrapolate: 'clamp',
     });
 
     const isExpanded = sheetState === 'expanded';
-
     const animatedBorderRadius = translateY.interpolate({
         inputRange: [0, 50],
         outputRange: [0, 24],
@@ -296,7 +362,7 @@ export default function JobDetailBottomSheet({
             paddingTop: isExpanded ? insets.top : 0,
             borderTopLeftRadius: animatedBorderRadius,
             borderTopRightRadius: animatedBorderRadius,
-        }
+        },
     ];
 
     const scrollViewHeight = (isExpanded ? SCREEN_H - insets.top : HALF_H) - 36 - keyboardHeight;
@@ -309,6 +375,7 @@ export default function JobDetailBottomSheet({
                 <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
             </Animated.View>
 
+            {/* White status bar filler when expanded */}
             {isExpanded && insets.top > 0 && (
                 <View
                     pointerEvents="none"
@@ -326,267 +393,53 @@ export default function JobDetailBottomSheet({
 
             {/* Sheet */}
             <Animated.View style={sheetStyle}>
-                {/* Drag Handle */}
+                {/* Drag Handle Area */}
                 <View {...panResponder.panHandlers} style={styles.handleArea}>
                     <View style={styles.handle} />
                 </View>
 
                 <ScrollView
                     style={{ flex: 1, maxHeight: scrollViewHeight }}
-                    contentContainerStyle={styles.content}
+                    contentContainerStyle={[
+                        styles.content,
+                        { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+                    ]}
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={true}
                     bounces={true}
                     overScrollMode="always"
                 >
-                    {/* Top Container: Job details info */}
-                    <View style={styles.topContainer}>
-                        {/* Job Header */}
-                        <View style={styles.jobHeader}>
-                            <View style={[styles.catIconLarge, { backgroundColor: `${categoryIcon.color}18` }]}>
-                                <Ionicons name={categoryIcon.icon as any} size={26} color={categoryIcon.color} />
-                            </View>
-                            <View style={styles.jobHeaderText}>
-                                <Text style={styles.jobDetailTitle} numberOfLines={2}>{job?.title}</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                                    <Text style={{ fontSize: 12, fontWeight: '700', color: categoryIcon.color }}>
-                                        {job?.category}
-                                    </Text>
-                                    {Boolean(job?.subcategory) && (
-                                        <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.neutral[600] }}>
-                                            • {job?.subcategory}
-                                        </Text>
-                                    )}
-                                </View>
-                                <View style={styles.jobMetaRow}>
-                                    <View style={styles.dateBadge}>
-                                        <Text style={styles.dateBadgeText}>Today</Text>
-                                    </View>
-                                    <Text style={styles.budgetPill}>
-                                        Rs. {base.toLocaleString()}
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
+                    {/* Top Container: Header, Location, Payment, Customer */}
+                    <JobDetailHeaderSection
+                        job={job}
+                        baseBudget={base}
+                        onOpenCustomerReviews={() => setCustomerReviewsVisible(true)}
+                    />
 
-                        {/* Location */}
-                        <View style={styles.detailRow}>
-                            <Ionicons name="location-outline" size={16} color={Colors.neutral[400]} />
-                            <View style={{ flex: 1 }}>
-                                {job?.is_location_loading || job?.location_name === 'Loading location...' ? (
-                                    <SkeletonBox width={160} height={16} borderRadius={4} style={{ marginVertical: 2 }} />
-                                ) : (
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Text style={styles.detailPrimary}>{job?.location_name}</Text>
-                                        {job?.distance_km !== undefined && job?.distance_km !== null && (
-                                            <View style={styles.distanceBadge}>
-                                                <Ionicons name="navigate-outline" size={12} color="#16A34A" style={{ marginRight: 2 }} />
-                                                <Text style={styles.distanceText}>{job.distance_km.toFixed(1)} km away</Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                )}
-                                {job?.location_area && (
-                                    <Text style={styles.detailSecondary}>{job?.location_area}</Text>
-                                )}
-                            </View>
-                        </View>
+                    {/* Middle Container: Description & Attachments Carousel */}
+                    <JobDetailDescriptionSection
+                        job={job}
+                        attachmentList={attachmentList}
+                        isAttachmentsLoading={isAttachmentsLoading}
+                        onPreviewImage={(uri) => setPreviewImage(uri)}
+                    />
 
-                        {/* Payment Method */}
-                        {(() => {
-                            const payStyle = getPaymentPrefStyleById(job?.payment_preference_id);
-                            return (
-                                <View style={styles.detailRow}>
-                                    <Ionicons name={payStyle.icon as any} size={16} color={payStyle.logoColor} />
-                                    <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Text style={styles.detailPrimary}>Payment Method</Text>
-                                        <Text style={[styles.detailPrimary, { fontWeight: '700', color: payStyle.logoColor }]}>
-                                            {payStyle.name}
-                                        </Text>
-                                    </View>
-                                </View>
-                            );
-                        })()}
-
-                        {/* Customer */}
-                        <View style={styles.customerSection}>
-                            <Text style={styles.subSectionLabel}>CUSTOMER</Text>
-                            <View style={styles.customerCard}>
-                                {job?.is_customer_loading || job?.customer_name === 'Loading customer...' ? (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                                        <SkeletonBox width={42} height={42} borderRadius={21} />
-                                        <View style={{ gap: 6, flex: 1 }}>
-                                            <SkeletonBox width={130} height={16} borderRadius={4} />
-                                            <SkeletonBox width={70} height={14} borderRadius={4} />
-                                        </View>
-                                    </View>
-                                ) : (
-                                    <Pressable
-                                        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}
-                                        onPress={() => {
-                                            if (job?.customer_id) {
-                                                setCustomerReviewsVisible(true);
-                                            }
-                                        }}
-                                    >
-                                        {job?.customer_image ? (
-                                            <Image source={{ uri: job.customer_image }} style={styles.custAvatarImage} />
-                                        ) : (
-                                            <View style={styles.custAvatar}>
-                                                <Text style={styles.custAvatarText}>
-                                                    {(job?.customer_name || 'C').charAt(0).toUpperCase()}
-                                                </Text>
-                                            </View>
-                                        )}
-                                        <View style={styles.custInfo}>
-                                            <Text style={styles.custName}>{job?.customer_name}</Text>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                                                <Ionicons name="star" size={13} color="#D97706" />
-                                                <Text style={styles.custRating}>
-                                                    {job?.customer_rating !== undefined && job?.customer_rating !== null
-                                                        ? ` ${job.customer_rating.toFixed(1)}`
-                                                        : ' New'}
-                                                </Text>
-                                                <Text style={{ fontSize: 11, color: Colors.brand.dark, fontWeight: '700', marginLeft: 4 }}>
-                                                    • View Ratings
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    </Pressable>
-                                )}
-                            </View>
-                        </View>
-
-                        {/* Description */}
-                        {Boolean(job?.description) && (
-                            <View style={styles.descriptionSection}>
-                                <Text style={styles.subSectionLabel}>DESCRIPTION</Text>
-                                <Text style={styles.descriptionText}>{job?.description}</Text>
-                            </View>
-                        )}
-
-                        {/* Attachments Carousel */}
-                        {attachmentList.length > 0 && (
-                            <View style={styles.attachmentsSection}>
-                                <Text style={styles.subSectionLabel}>ATTACHED PHOTOS ({attachmentList.length})</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.attachmentsRow}>
-                                    {attachmentList.map((uri, idx) => (
-                                        <TouchableOpacity
-                                            key={`att_${idx}`}
-                                            activeOpacity={0.8}
-                                            style={styles.attachmentCard}
-                                            onPress={() => setPreviewImage(uri)}
-                                        >
-                                            <Image source={{ uri }} style={styles.attachmentImage} />
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-                            </View>
-                        )}
-                    </View>
-
-                    {/* Bottom Container: Bidding Options */}
-                    <View style={styles.bottomContainer}>
-                        <Text style={styles.subSectionLabel}>SELECT YOUR BID</Text>
-
-                        {/* Quick Bid Options */}
-                        <View style={styles.quickBidRow}>
-                            {[
-                                { key: 'plus5' as BidOption, label: `+5%`, sub: `Rs.${plus5.toLocaleString()}` },
-                                { key: 'plus10' as BidOption, label: `+10%`, sub: `Rs.${plus10.toLocaleString()}` },
-                                { key: 'plus15' as BidOption, label: `+15%`, sub: `Rs.${plus15.toLocaleString()}` },
-                            ].map((opt) => {
-                                const active = selectedBid === opt.key;
-                                return (
-                                    <Pressable
-                                        key={opt.key}
-                                        style={[styles.quickBidBtn, active && styles.quickBidBtnActive, isWaiting && styles.quickBidBtnDisabled]}
-                                        onPress={() => {
-                                            if (!isWaiting) {
-                                                if (selectedBid === opt.key) {
-                                                    setSelectedBid(null);
-                                                    setCustomAmount('');
-                                                } else {
-                                                    setSelectedBid(opt.key);
-                                                    if (opt.key === 'plus5') setCustomAmount(plus5.toString());
-                                                    if (opt.key === 'plus10') setCustomAmount(plus10.toString());
-                                                    if (opt.key === 'plus15') setCustomAmount(plus15.toString());
-                                                }
-                                            }
-                                        }}
-                                        disabled={isWaiting}
-                                    >
-                                        <Text style={[styles.quickBidAmount, active && styles.quickBidAmountActive, isWaiting && styles.disabledText]}>
-                                            {opt.label}
-                                        </Text>
-                                        <Text style={[styles.quickBidSub, active && styles.quickBidSubActive, isWaiting && styles.disabledText]}>
-                                            {opt.sub}
-                                        </Text>
-                                    </Pressable>
-                                );
-                            })}
-                        </View>
-
-                        {/* Custom Bid */}
-                        <Text style={[styles.subSectionLabel, { marginTop: 14 }]}>CUSTOM BID</Text>
-                        <View style={[styles.customBidInput, isWaiting && styles.customBidInputDisabled]}>
-                            <Text style={styles.currencyPrefix}>Rs.</Text>
-                            <TextInput
-                                style={styles.customBidField}
-                                placeholder="Enter amount"
-                                placeholderTextColor={Colors.neutral[400]}
-                                keyboardType="numeric"
-                                value={customAmount}
-                                onChangeText={(t) => {
-                                    if (isWaiting) return;
-                                    const clean = t.replace(/[^0-9]/g, '');
-                                    setCustomAmount(clean);
-                                    if (clean === '') {
-                                        setSelectedBid(null);
-                                    } else {
-                                        setSelectedBid('custom');
-                                    }
-                                }}
-                                editable={!isWaiting}
-                            />
-                        </View>
-
-                        {/* Waiting Bar */}
-                        {isWaiting && (
-                            <View style={styles.waitingBar}>
-                                <Animated.View
-                                    style={[
-                                        styles.progressBar,
-                                        {
-                                            width: progressAnim.interpolate({
-                                                inputRange: [0, 1],
-                                                outputRange: ['0%', '100%'],
-                                            }),
-                                        },
-                                    ]}
-                                />
-                                <View style={styles.waitingContent}>
-                                    <Ionicons name="time-outline" size={16} color="#064E3B" style={{ marginRight: 8 }} />
-                                    <Text style={styles.waitingText}>
-                                        Waiting for user to accept/decline... ({countdown}s)
-                                    </Text>
-                                </View>
-                            </View>
-                        )}
-
-                        {/* Bid Button */}
-                        <Pressable
-                            style={[styles.bidButton, isWaiting && styles.bidButtonDisabled]}
-                            onPress={handlePlaceBid}
-                            disabled={isWaiting}
-                        >
-                            <Text style={styles.bidButtonText}>
-                                {isWaiting
-                                    ? `Bid Placed — Rs.${displayAmount.toLocaleString()}`
-                                    : `Place Bid at Rs.${computedBidAmount.toLocaleString()}`}
-                            </Text>
-                        </Pressable>
-                    </View>
+                    {/* Bottom Container: Quick Bid, Custom Bid, Waiting bar & Action button */}
+                    <JobDetailBiddingSection
+                        plus5={plus5}
+                        plus10={plus10}
+                        plus15={plus15}
+                        selectedBid={selectedBid}
+                        customAmount={customAmount}
+                        isWaiting={isWaiting}
+                        countdown={countdown}
+                        progressAnim={progressAnim}
+                        computedBidAmount={computedBidAmount}
+                        displayAmount={displayAmount}
+                        onSelectBid={handleSelectBid}
+                        onChangeCustomAmount={handleChangeCustomAmount}
+                        onPlaceBid={handlePlaceBid}
+                    />
                 </ScrollView>
             </Animated.View>
 
