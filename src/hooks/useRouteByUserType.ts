@@ -31,7 +31,7 @@ export function useRouteByUserType() {
 
         // Professional / Worker (3)
         if (user.usertype_id === USER_TYPE_PRO) {
-            router.replace('/(protected)/(pro)/dashboard');
+            router.replace('/(protected)/(pro)/live-jobs');
             return;
         }
 
