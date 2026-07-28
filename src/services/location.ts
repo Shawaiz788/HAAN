@@ -1,11 +1,9 @@
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
-const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
-
 import { getCountries, createCountry } from './country';
 import { getCities, createCity } from './city';
 import { getAreas, createArea } from './area';
-import { fetchWithTimeout } from './fetchClient';
+import { fetchWithTimeout, API_URL } from './fetchClient';
 import { Country, City, Area, UserLocation } from '@/types';
+import { logger } from '@/utils/logger';
 
 export { Country, getCountries, createCountry };
 export { City, getCities, createCity };
@@ -13,7 +11,7 @@ export { Area, getAreas, createArea };
 export { UserLocation };
 
 export const createLocation = async (location: UserLocation): Promise<UserLocation> => {
-  console.log('[createLocation API] Sending payload:', JSON.stringify(location, null, 2));
+  logger.log('[createLocation API] Sending payload:', JSON.stringify(location, null, 2));
   const response = await fetchWithTimeout(`${API_URL}/app/location/`, {
     method: 'POST',
     headers: {
@@ -23,8 +21,8 @@ export const createLocation = async (location: UserLocation): Promise<UserLocati
   });
 
   const responseText = await response.text();
-  console.log('[createLocation API] Response Status:', response.status);
-  console.log('[createLocation API] Response Body:', responseText);
+  logger.log('[createLocation API] Response Status:', response.status);
+  logger.log('[createLocation API] Response Body:', responseText);
 
   if (!response.ok) {
     throw new Error(`Failed to create location. Status: ${response.status}. Response: ${responseText}`);
@@ -73,11 +71,11 @@ export interface LocationChainInput {
 
 export const getOrCreateLocationChain = async (input: LocationChainInput): Promise<UserLocation> => {
   const { countryName, cityName, areaName, houseNumber, streetNumber, latitude, longitude, zipCode, formatted_address } = input;
-  console.log('[LocationChain] Starting resolution for:', input);
+  logger.log('[LocationChain] Starting resolution for:', input);
 
   // ── Fast path: city and area IDs already known from the UI ──────────────────
   if (input.resolvedCityId && input.resolvedAreaId) {
-    console.log('[LocationChain] Using pre-resolved city/area IDs — resolving countryId...');
+    logger.log('[LocationChain] Using pre-resolved city/area IDs — resolving countryId...');
     
     let countryId = input.resolvedCountryId;
     if (!countryId) {
@@ -93,7 +91,7 @@ export const getOrCreateLocationChain = async (input: LocationChainInput): Promi
       }
     }
 
-    console.log(`[LocationChain] Fast path IDs: countryId=${countryId}, cityId=${input.resolvedCityId}, areaId=${input.resolvedAreaId}`);
+    logger.log(`[LocationChain] Fast path IDs: countryId=${countryId}, cityId=${input.resolvedCityId}, areaId=${input.resolvedAreaId}`);
 
     const cleanLat = latitude ? Number(latitude.toFixed(6)) : undefined;
     const cleanLng = longitude ? Number(longitude.toFixed(6)) : undefined;
@@ -110,7 +108,7 @@ export const getOrCreateLocationChain = async (input: LocationChainInput): Promi
       formatted_address,
     };
 
-    console.log('[LocationChain] Fast-path location payload:', locationPayload);
+    logger.log('[LocationChain] Fast-path location payload:', locationPayload);
     return await createLocation(locationPayload);
   }
 
@@ -126,7 +124,7 @@ export const getOrCreateLocationChain = async (input: LocationChainInput): Promi
   const safeCities = Array.isArray(cities) ? cities : [];
   const safeAreas = Array.isArray(areas) ? areas : [];
 
-  console.log(`[LocationChain] Loaded ${safeCountries.length} countries, ${safeCities.length} cities, ${safeAreas.length} areas`);
+  logger.log(`[LocationChain] Loaded ${safeCountries.length} countries, ${safeCities.length} cities, ${safeAreas.length} areas`);
 
   // 1. Resolve Country
   let countryId: number;

@@ -15,7 +15,6 @@ import {
     Platform,
     Keyboard,
     Image,
-    Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,67 +25,18 @@ import { useAuth } from '@/context/auth';
 import { getCategoryStyle } from '@/store/categoryStore';
 import { getTaskAttachments } from '@/services/task';
 import UserReviewsModal from '@/components/UserReviewsModal';
-import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/store/paymentStore';
+import { getPaymentPrefStyleById } from '@/store/paymentStore';
 import { styles } from '@/styles/jobDetailBottomSheet.styles';
+import { getNormalizedAttachments } from '@/utils/attachmentUtils';
+import { ImagePreviewOverlay } from '@/components/pro/ImagePreviewOverlay';
+import { ActiveBidState } from '@/hooks/useActiveBids';
+import { logger } from '@/utils/logger';
 
 const { height: WINDOW_H } = Dimensions.get('window');
 const { height: SCREEN_H_SCREEN } = Dimensions.get('screen');
 const SCREEN_H = Math.max(WINDOW_H, SCREEN_H_SCREEN);
-const FULL_H = SCREEN_H;
 const HALF_H = SCREEN_H * 0.58;
 const CLOSED_Y = SCREEN_H;
-
-const BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
-
-function getNormalizedAttachments(attachmentsData: any): string[] {
-    if (!attachmentsData) return [];
-
-    let list: any[] = [];
-    if (Array.isArray(attachmentsData)) {
-        list = attachmentsData;
-    } else if (typeof attachmentsData === 'string') {
-        const trimmed = attachmentsData.trim();
-        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-            try {
-                const parsed = JSON.parse(trimmed);
-                if (Array.isArray(parsed)) list = parsed;
-            } catch {
-                list = trimmed.split(',').map((s) => s.trim());
-            }
-        } else if (trimmed.length > 0) {
-            list = trimmed.split(',').map((s) => s.trim());
-        }
-    } else if (typeof attachmentsData === 'object') {
-        list = [attachmentsData];
-    }
-
-    return list
-        .map((item) => {
-            if (!item) return null;
-            let uri = '';
-            if (typeof item === 'string') {
-                uri = item;
-            } else if (typeof item === 'object') {
-                uri = item.file || item.uri || item.url || item.path || '';
-            }
-            if (!uri) return null;
-            if (
-                !uri.startsWith('http://') &&
-                !uri.startsWith('https://') &&
-                !uri.startsWith('file://') &&
-                !uri.startsWith('data:')
-            ) {
-                if (BASE_URL) {
-                    const cleanPath = uri.startsWith('/') ? uri : `/${uri}`;
-                    uri = `${BASE_URL}${cleanPath}`;
-                }
-            }
-            return uri;
-        })
-        .filter((uri): uri is string => Boolean(uri && uri.trim().length > 0));
-}
-
-import { ActiveBidState } from '@/hooks/useActiveBids';
 
 type BidOption = 'plus5' | 'plus10' | 'plus15' | 'custom' | null;
 
@@ -100,360 +50,238 @@ interface JobDetailBottomSheetProps {
     hasActiveTask?: boolean;
 }
 
-function SkeletonBox({
-    width,
-    height,
-    borderRadius = 4,
-    style,
-}: {
-    width: number | `${number}%`;
-    height: number;
-    borderRadius?: number;
-    style?: any;
-}) {
-    const pulseAnim = useRef(new Animated.Value(0.3)).current;
-
+const SkeletonBox = ({ width, height, borderRadius = 4, style }: any) => {
+    const anim = useRef(new Animated.Value(0.3)).current;
     useEffect(() => {
-        const animation = Animated.loop(
+        const loop = Animated.loop(
             Animated.sequence([
-                Animated.timing(pulseAnim, {
-                    toValue: 0.8,
-                    duration: 650,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(pulseAnim, {
-                    toValue: 0.3,
-                    duration: 650,
-                    useNativeDriver: true,
-                }),
+                Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
+                Animated.timing(anim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
             ])
         );
-        animation.start();
-        return () => animation.stop();
-    }, [pulseAnim]);
+        loop.start();
+        return () => loop.stop();
+    }, [anim]);
 
     return (
         <Animated.View
             style={[
-                {
-                    width,
-                    height,
-                    borderRadius,
-                    backgroundColor: Colors.neutral[200] || '#E5E7EB',
-                    opacity: pulseAnim,
-                },
+                { width, height, borderRadius, backgroundColor: '#E2E8F0', opacity: anim },
                 style,
             ]}
         />
     );
-}
-
-function showToast(message: string) {
-    if (Platform.OS === 'android') {
-        ToastAndroid.show(message, ToastAndroid.SHORT);
-    } else {
-        Alert.alert('', message);
-    }
-}
+};
 
 export default function JobDetailBottomSheet({
     job,
     isVisible,
     onClose,
     onBidAccepted,
-    activeBid,
+    activeBid: passedActiveBid,
     onPlaceBid,
-    hasActiveTask,
+    hasActiveTask = false,
 }: JobDetailBottomSheetProps) {
+    const insets = useSafeAreaInsets();
     const { user } = useAuth();
-    const { bids: wsBids, isBiddingClosed, placeBid: sendWsBid } = useBiddingWebSocket({
+    const [selectedBid, setSelectedBid] = useState<BidOption>(null);
+    const [customAmount, setCustomAmount] = useState('');
+    const [sheetState, setSheetState] = useState<'closed' | 'half' | 'expanded'>('closed');
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    const [isWaiting, setIsWaiting] = useState(false);
+    const [bidAmountPlaced, setBidAmountPlaced] = useState<number | null>(null);
+    const [countdown, setCountdown] = useState(60);
+    const [customerReviewsVisible, setCustomerReviewsVisible] = useState(false);
+    const [localAttachments, setLocalAttachments] = useState<any[]>(job?.attachments || []);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+    const translateY = useRef(new Animated.Value(CLOSED_Y)).current;
+    const progressAnim = useRef(new Animated.Value(0)).current;
+
+    const activeBidForThisJob = (passedActiveBid && job && passedActiveBid.jobId === job.id) ? passedActiveBid : null;
+
+    useEffect(() => {
+        if (job) {
+            setLocalAttachments(job.attachments || []);
+            if (job.id) {
+                getTaskAttachments(job.id)
+                    .then((fetched) => {
+                        if (Array.isArray(fetched) && fetched.length > 0) {
+                            setLocalAttachments(fetched);
+                        }
+                    })
+                    .catch((err) => {
+                        logger.warn('[JobDetailBottomSheet] Failed to load attachments:', err);
+                    });
+            }
+        }
+    }, [job]);
+
+    useEffect(() => {
+        if (activeBidForThisJob) {
+            setIsWaiting(true);
+            setBidAmountPlaced(activeBidForThisJob.amount);
+            const elapsedSec = Math.floor((Date.now() - activeBidForThisJob.startTimeMs) / 1000);
+            const totalSec = Math.floor(activeBidForThisJob.durationMs / 1000);
+            const remaining = Math.max(0, totalSec - elapsedSec);
+            setCountdown(remaining);
+            progressAnim.setValue(totalSec > 0 ? elapsedSec / totalSec : 0);
+        } else {
+            setIsWaiting(false);
+            setBidAmountPlaced(null);
+            setCountdown(60);
+            progressAnim.setValue(0);
+        }
+    }, [activeBidForThisJob]);
+
+    const handleWSBidAccepted = useCallback(
+        (acceptedBid: any) => {
+            if (job) {
+                const finalAmount = acceptedBid.price || bidAmountPlaced || job.budget;
+                if (Platform.OS === 'android') {
+                    ToastAndroid.show(`🎉 Your bid of Rs.${finalAmount} was accepted!`, ToastAndroid.LONG);
+                } else {
+                    Alert.alert('Bid Accepted! 🎉', `Your bid of Rs.${finalAmount} was accepted!`);
+                }
+                onBidAccepted?.(job, finalAmount);
+                onClose();
+            }
+        },
+        [job, bidAmountPlaced, onBidAccepted, onClose]
+    );
+
+    const { placeBid: wsPlaceBid } = useBiddingWebSocket({
         taskId: job?.id,
         userId: user?.id,
         isCustomer: false,
         enabled: isVisible && Boolean(job?.id),
-        token: user?.token,
-        onBidAccepted: (bid) => {
-            console.log('[JobDetailBottomSheet] bid_accepted triggered via WS:', bid);
-            if (String(bid.user_id) === String(user?.id)) {
-                if (job) {
-                    onBidAccepted?.(job, bid.price);
-                }
-            }
-        },
-        onTaskAssignedToOther: (closedId) => {
-            console.log('[JobDetailBottomSheet] Task assigned to another pro via WS:', closedId);
-            onClose();
-        },
+        onBidAccepted: handleWSBidAccepted,
     });
-    const insets = useSafeAreaInsets();
-    const translateY = useRef(new Animated.Value(CLOSED_Y)).current;
-    const currentY = useRef(CLOSED_Y);
-    const progressAnim = useRef(new Animated.Value(1)).current;
-
-    const [selectedBid, setSelectedBid] = useState<BidOption>(null);
-    const [customAmount, setCustomAmount] = useState('');
-    const [countdown, setCountdown] = useState(10);
-    const [sheetState, setSheetState] = useState<'default' | 'expanded'>('default');
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
-    const [localVisible, setLocalVisible] = useState(isVisible);
-    const [previewImage, setPreviewImage] = useState<string | null>(null);
-    const [localAttachments, setLocalAttachments] = useState<any[]>(job?.attachments || []);
-    const waitingTimer = useRef<NodeJS.Timeout | null>(null);
-    const countdownTimer = useRef<NodeJS.Timeout | null>(null);
-    const [customerReviewsVisible, setCustomerReviewsVisible] = useState(false);
-
-    // Synchronize local visibility and attachments when job changes or sheet opens
-    useEffect(() => {
-        if (isVisible) {
-            setLocalVisible(true);
-        }
-    }, [isVisible]);
-
-    const [isAttachmentsLoading, setIsAttachmentsLoading] = useState(false);
 
     useEffect(() => {
-        setLocalAttachments(job?.attachments || []);
-    }, [job]);
-
-    useEffect(() => {
-        if (isVisible && job?.id) {
-            setIsAttachmentsLoading(true);
-            getTaskAttachments(job.id)
-                .then((fresh) => {
-                    if (fresh && Array.isArray(fresh)) {
-                        setLocalAttachments(fresh);
-                    }
-                })
-                .catch((err) => {
-                    console.warn(`[JobDetailBottomSheet] Failed to fetch fresh attachments for task ${job.id}:`, err);
-                })
-                .finally(() => {
-                    setIsAttachmentsLoading(false);
-                });
-        } else if (!isVisible) {
-            setIsAttachmentsLoading(false);
-        }
-    }, [isVisible, job?.id]);
-
-    const base = job?.budget ?? 0;
-    const plus5 = Math.round(base * 1.05);
-    const plus10 = Math.round(base * 1.1);
-    const plus15 = Math.round(base * 1.15);
-
-    const computedBidAmount = (() => {
-        if (selectedBid === 'custom') {
-            const v = parseInt(customAmount, 10);
-            return isNaN(v) ? base : v;
-        }
-        if (selectedBid === 'plus5') return plus5;
-        if (selectedBid === 'plus10') return plus10;
-        if (selectedBid === 'plus15') return plus15;
-        return base;
-    })();
-
-    const isWaiting = Boolean(activeBid);
-    const displayAmount = activeBid ? activeBid.amount : computedBidAmount;
-
-    useEffect(() => {
-        if (!activeBid || !isVisible) {
-            progressAnim.setValue(1);
-            return;
-        }
-
-        const elapsed = Date.now() - activeBid.startTimeMs;
-        const remainingMs = Math.max(0, activeBid.durationMs - elapsed);
-
-        if (remainingMs <= 0) return;
-
-        const initialRatio = remainingMs / activeBid.durationMs;
-        progressAnim.setValue(initialRatio);
-        setCountdown(Math.ceil(remainingMs / 1000));
-
-        const anim = Animated.timing(progressAnim, {
-            toValue: 0,
-            duration: remainingMs,
-            useNativeDriver: false,
-        });
-        anim.start();
-
-        const interval = setInterval(() => {
-            const currentElapsed = Date.now() - activeBid.startTimeMs;
-            const rem = Math.max(0, activeBid.durationMs - currentElapsed);
-            const sec = Math.ceil(rem / 1000);
-            setCountdown(sec);
-            if (rem <= 0) {
-                clearInterval(interval);
+        const showSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            (e) => {
+                setKeyboardHeight(e.endCoordinates.height);
             }
-        }, 1000);
-
-        return () => {
-            anim.stop();
-            clearInterval(interval);
-        };
-    }, [activeBid, isVisible]);
-
-    // Keyboard height listener
-    useEffect(() => {
-        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-        const showSub = Keyboard.addListener(showEvent, (e) => {
-            setKeyboardHeight(e.endCoordinates.height);
-        });
-        const hideSub = Keyboard.addListener(hideEvent, () => {
-            setKeyboardHeight(0);
-        });
-
+        );
+        const hideSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => {
+                setKeyboardHeight(0);
+            }
+        );
         return () => {
             showSub.remove();
             hideSub.remove();
         };
     }, []);
 
-    // Open / close animation
-    useEffect(() => {
-        if (isVisible && job) {
-            // Reset state
-            setSelectedBid(null);
-            setCustomAmount('');
-            setSheetState('default');
-            setLocalVisible(true);
-
+    const animateTo = useCallback(
+        (targetY: number, toState: 'closed' | 'half' | 'expanded') => {
             Animated.spring(translateY, {
-                toValue: SCREEN_H - HALF_H,
-                useNativeDriver: true,
-                tension: 50,
-                friction: 10,
-            }).start();
-            currentY.current = SCREEN_H - HALF_H;
-        } else {
-            Animated.spring(translateY, {
-                toValue: SCREEN_H,
-                useNativeDriver: true,
-                tension: 50,
-                friction: 10,
-            }).start(({ finished }) => {
-                if (finished) {
-                    setLocalVisible(false);
+                toValue: targetY,
+                useNativeDriver: false,
+                bounciness: 4,
+                speed: 14,
+            }).start(() => {
+                setSheetState(toState);
+                if (toState === 'closed') {
+                    onClose();
                 }
             });
-            currentY.current = SCREEN_H;
-        }
-    }, [isVisible, job]);
+        },
+        [translateY, onClose]
+    );
 
-    // Cleanup timers on unmount
     useEffect(() => {
-        return () => {
-            if (waitingTimer.current) clearTimeout(waitingTimer.current);
-            if (countdownTimer.current) clearInterval(countdownTimer.current);
-        };
-    }, []);
+        if (isVisible) {
+            setSelectedBid(null);
+            setCustomAmount('');
+            animateTo(SCREEN_H - HALF_H, 'half');
+        } else {
+            animateTo(CLOSED_Y, 'closed');
+        }
+    }, [isVisible]);
 
-    // PanResponder for dragging
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
-            onPanResponderGrant: () => {
-                translateY.stopAnimation((val) => { currentY.current = val; });
+            onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+            onPanResponderMove: (_, gestureState) => {
+                const currentBase = sheetState === 'expanded' ? 0 : SCREEN_H - HALF_H;
+                const newY = currentBase + gestureState.dy;
+                if (newY >= 0) {
+                    translateY.setValue(newY);
+                }
             },
-            onPanResponderMove: (_, g) => {
-                const newY = Math.max(0, currentY.current + g.dy);
-                translateY.setValue(newY);
-            },
-            onPanResponderRelease: (_, g) => {
-                const cur = currentY.current + g.dy;
-                const isSwipeDown = g.dy > 50 || g.vy > 0.4;
-                const isSwipeUp = g.dy < -50 || g.vy < -0.4;
-
-                if (isSwipeDown) {
-                    if (cur > (SCREEN_H - HALF_H) + 60) {
-                        // Close
-                        Animated.spring(translateY, { toValue: SCREEN_H, useNativeDriver: true, tension: 50, friction: 10 }).start(({ finished }) => {
-                            if (finished) {
-                                onClose();
-                                setLocalVisible(false);
-                            }
-                        });
-                        currentY.current = SCREEN_H;
+            onPanResponderRelease: (_, gestureState) => {
+                const { dy, vy } = gestureState;
+                if (sheetState === 'half') {
+                    if (dy < -80 || vy < -0.5) {
+                        animateTo(0, 'expanded');
+                    } else if (dy > 80 || vy > 0.5) {
+                        animateTo(CLOSED_Y, 'closed');
                     } else {
-                        // Snap to half
-                        Animated.spring(translateY, { toValue: SCREEN_H - HALF_H, useNativeDriver: true, tension: 50, friction: 10 }).start();
-                        currentY.current = SCREEN_H - HALF_H;
-                        setSheetState('default');
+                        animateTo(SCREEN_H - HALF_H, 'half');
                     }
-                } else if (isSwipeUp) {
-                    // Snap to full
-                    Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 50, friction: 10 }).start();
-                    currentY.current = 0;
-                    setSheetState('expanded');
-                } else {
-                    // Snap back to nearest
-                    const snapFull = Math.abs(cur - 0);
-                    const snapHalf = Math.abs(cur - (SCREEN_H - HALF_H));
-                    const snapClose = Math.abs(cur - SCREEN_H);
-                    if (snapFull < snapHalf && snapFull < snapClose) {
-                        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 50, friction: 10 }).start();
-                        currentY.current = 0;
-                        setSheetState('expanded');
-                    } else if (snapClose < snapHalf) {
-                        Animated.spring(translateY, { toValue: SCREEN_H, useNativeDriver: true, tension: 50, friction: 10 }).start(({ finished }) => {
-                            if (finished) {
-                                onClose();
-                                setLocalVisible(false);
-                            }
-                        });
-                        currentY.current = SCREEN_H;
+                } else if (sheetState === 'expanded') {
+                    if (dy > 100 || vy > 0.5) {
+                        animateTo(SCREEN_H - HALF_H, 'half');
                     } else {
-                        Animated.spring(translateY, { toValue: SCREEN_H - HALF_H, useNativeDriver: true, tension: 50, friction: 10 }).start();
-                        currentY.current = SCREEN_H - HALF_H;
-                        setSheetState('default');
+                        animateTo(0, 'expanded');
                     }
                 }
             },
         })
     ).current;
 
+    const base = job?.budget ?? 0;
+    const plus5 = Math.round(base * 1.05);
+    const plus10 = Math.round(base * 1.10);
+    const plus15 = Math.round(base * 1.15);
+
+    let computedBidAmount = base;
+    if (selectedBid === 'plus5') computedBidAmount = plus5;
+    if (selectedBid === 'plus10') computedBidAmount = plus10;
+    if (selectedBid === 'plus15') computedBidAmount = plus15;
+    if (selectedBid === 'custom') {
+        const parsed = parseInt(customAmount, 10);
+        computedBidAmount = isNaN(parsed) ? base : parsed;
+    }
+
+    const displayAmount = isWaiting && bidAmountPlaced ? bidAmountPlaced : computedBidAmount;
+
     const handlePlaceBid = () => {
+        if (!job) return;
         if (hasActiveTask) {
             Alert.alert(
                 'Active Job in Progress',
-                'You already have an active job in progress! Please complete your current job before bidding on another task.',
+                'You already have an accepted job in progress. Complete your active job before bidding on new tasks.',
                 [{ text: 'OK' }]
             );
             return;
         }
-        if (isWaiting || !job) return;
-        if (isBiddingClosed) {
-            showToast('This task has already been assigned.');
-            return;
-        }
-        sendWsBid(computedBidAmount, 1);
-        showToast(`You have successfully placed a bid of Rs.${computedBidAmount.toLocaleString()}.`);
-        Keyboard.dismiss();
+
+        wsPlaceBid(computedBidAmount, 1);
         if (onPlaceBid) {
             onPlaceBid(job, computedBidAmount);
         }
     };
 
-    const catStyle = getCategoryStyle(job?.category ?? '');
-    const categoryIcon = {
-        name: job?.category_icon ?? catStyle.icon,
-        color: job?.category_color ?? catStyle.color,
-    };
+    if (!isVisible && sheetState === 'closed') return null;
 
-    if (!localVisible) return null;
+    const categoryIcon = getCategoryStyle(job?.category ?? '');
 
-    // Interpolate translateY to animate scrim opacity
     const scrimOpacity = translateY.interpolate({
-        inputRange: [0, SCREEN_H - HALF_H, SCREEN_H],
+        inputRange: [0, SCREEN_H - HALF_H, CLOSED_Y],
         outputRange: [1, 0.8, 0],
         extrapolate: 'clamp',
     });
 
     const isExpanded = sheetState === 'expanded';
 
-    // Interpolate top border radius as sheet reaches full top (0..50px)
     const animatedBorderRadius = translateY.interpolate({
         inputRange: [0, 50],
         outputRange: [0, 24],
@@ -481,7 +309,6 @@ export default function JobDetailBottomSheet({
                 <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
             </Animated.View>
 
-            {/* White status bar filler — covers safe area on Android/iOS when fully expanded */}
             {isExpanded && insets.top > 0 && (
                 <View
                     pointerEvents="none"
@@ -517,7 +344,7 @@ export default function JobDetailBottomSheet({
                         {/* Job Header */}
                         <View style={styles.jobHeader}>
                             <View style={[styles.catIconLarge, { backgroundColor: `${categoryIcon.color}18` }]}>
-                                <Ionicons name={categoryIcon.name as any} size={26} color={categoryIcon.color} />
+                                <Ionicons name={categoryIcon.icon as any} size={26} color={categoryIcon.color} />
                             </View>
                             <View style={styles.jobHeaderText}>
                                 <Text style={styles.jobDetailTitle} numberOfLines={2}>{job?.title}</Text>
@@ -602,98 +429,73 @@ export default function JobDetailBottomSheet({
                                             }
                                         }}
                                     >
-                                        <View style={styles.custAvatar}>
-                                            {job?.customer_image ? (
-                                                <Image source={{ uri: job.customer_image }} style={styles.custAvatarImage} />
-                                            ) : (
+                                        {job?.customer_image ? (
+                                            <Image source={{ uri: job.customer_image }} style={styles.custAvatarImage} />
+                                        ) : (
+                                            <View style={styles.custAvatar}>
                                                 <Text style={styles.custAvatarText}>
-                                                    {(job?.customer_name || 'C')[0].toUpperCase()}
+                                                    {(job?.customer_name || 'C').charAt(0).toUpperCase()}
                                                 </Text>
-                                            )}
-                                        </View>
+                                            </View>
+                                        )}
                                         <View style={styles.custInfo}>
                                             <Text style={styles.custName}>{job?.customer_name}</Text>
-                                            {job?.customer_rating !== undefined && job?.customer_rating !== null && (
-                                                <Text style={styles.custRating}>★ {Number(job.customer_rating).toFixed(1)} rating (Tap to view reviews)</Text>
-                                            )}
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                                <Ionicons name="star" size={13} color="#D97706" />
+                                                <Text style={styles.custRating}>
+                                                    {job?.customer_rating !== undefined && job?.customer_rating !== null
+                                                        ? ` ${job.customer_rating.toFixed(1)}`
+                                                        : ' New'}
+                                                </Text>
+                                                <Text style={{ fontSize: 11, color: Colors.brand.dark, fontWeight: '700', marginLeft: 4 }}>
+                                                    • View Ratings
+                                                </Text>
+                                            </View>
                                         </View>
                                     </Pressable>
                                 )}
                             </View>
                         </View>
 
-                        {/* Description & Attachments */}
-                        <View style={styles.expandedDetails}>
+                        {/* Description */}
+                        {Boolean(job?.description) && (
                             <View style={styles.descriptionSection}>
                                 <Text style={styles.subSectionLabel}>DESCRIPTION</Text>
-                                <Text style={styles.descriptionText}>
-                                    {job?.description || (job as any)?.body || 'No description provided.'}
-                                </Text>
+                                <Text style={styles.descriptionText}>{job?.description}</Text>
                             </View>
+                        )}
 
+                        {/* Attachments Carousel */}
+                        {attachmentList.length > 0 && (
                             <View style={styles.attachmentsSection}>
-                                <View style={styles.attachmentsHeaderRow}>
-                                    <Text style={styles.subSectionLabel}>ATTACHMENTS ({attachmentList.length})</Text>
-                                    {attachmentList.length > 0 && (
-                                        <Text style={styles.tapToViewHint}>Tap image to view</Text>
-                                    )}
-                                </View>
-
-                                {isAttachmentsLoading && attachmentList.length === 0 ? (
-                                    <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 6 }}>
-                                        <SkeletonBox width={80} height={80} borderRadius={8} />
-                                        <SkeletonBox width={80} height={80} borderRadius={8} />
-                                    </View>
-                                ) : attachmentList.length > 0 ? (
-                                    <ScrollView
-                                        horizontal
-                                        nestedScrollEnabled
-                                        showsHorizontalScrollIndicator={false}
-                                        contentContainerStyle={styles.attachmentsRow}
-                                        keyboardShouldPersistTaps="handled"
-                                    >
-                                        {attachmentList.map((uri, idx) => (
-                                            <TouchableOpacity
-                                                key={idx}
-                                                style={styles.attachmentCard}
-                                                activeOpacity={0.7}
-                                                onPress={() => {
-                                                    setPreviewImage(uri);
-                                                }}
-                                            >
-                                                <Image
-                                                    source={{ uri }}
-                                                    style={styles.attachmentImage}
-                                                    resizeMode="cover"
-                                                />
-                                                <View style={styles.zoomIconOverlay} pointerEvents="none">
-                                                    <Ionicons name="expand-outline" size={12} color={Colors.white} />
-                                                </View>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </ScrollView>
-                                ) : (
-                                    <View style={styles.noAttachmentBox}>
-                                        <Ionicons name="images-outline" size={18} color={Colors.neutral[400]} />
-                                        <Text style={styles.noAttachmentText}>No attachments provided</Text>
-                                    </View>
-                                )}
+                                <Text style={styles.subSectionLabel}>ATTACHED PHOTOS ({attachmentList.length})</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.attachmentsRow}>
+                                    {attachmentList.map((uri, idx) => (
+                                        <TouchableOpacity
+                                            key={`att_${idx}`}
+                                            activeOpacity={0.8}
+                                            style={styles.attachmentCard}
+                                            onPress={() => setPreviewImage(uri)}
+                                        >
+                                            <Image source={{ uri }} style={styles.attachmentImage} />
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
                             </View>
-                        </View>
-
-                        <View style={styles.sheetDivider} />
+                        )}
                     </View>
 
-                    {/* Bottom Container: Action buttons and bidding options */}
+                    {/* Bottom Container: Bidding Options */}
                     <View style={styles.bottomContainer}>
-                        {/* Quick Bid Row */}
-                        <Text style={styles.subSectionLabel}>QUICK BID</Text>
+                        <Text style={styles.subSectionLabel}>SELECT YOUR BID</Text>
+
+                        {/* Quick Bid Options */}
                         <View style={styles.quickBidRow}>
-                            {([
-                                { key: 'plus5', label: `Rs.${plus5.toLocaleString()}`, sub: '+5%' },
-                                { key: 'plus10', label: `Rs.${plus10.toLocaleString()}`, sub: '+10%' },
-                                { key: 'plus15', label: `Rs.${plus15.toLocaleString()}`, sub: '+15%' },
-                            ] as const).map((opt) => {
+                            {[
+                                { key: 'plus5' as BidOption, label: `+5%`, sub: `Rs.${plus5.toLocaleString()}` },
+                                { key: 'plus10' as BidOption, label: `+10%`, sub: `Rs.${plus10.toLocaleString()}` },
+                                { key: 'plus15' as BidOption, label: `+15%`, sub: `Rs.${plus15.toLocaleString()}` },
+                            ].map((opt) => {
                                 const active = selectedBid === opt.key;
                                 return (
                                     <Pressable
@@ -788,30 +590,11 @@ export default function JobDetailBottomSheet({
                 </ScrollView>
             </Animated.View>
 
-            {/* Full-Screen Image Preview Overlay */}
-            {Boolean(previewImage) && (
-                <View style={styles.modalBackdrop}>
-                    <TouchableOpacity
-                        style={styles.modalCloseArea}
-                        activeOpacity={1}
-                        onPress={() => setPreviewImage(null)}
-                    />
-                    <View style={styles.modalImageContainer} pointerEvents="none">
-                        <Image
-                            source={{ uri: previewImage! }}
-                            style={styles.modalFullImage}
-                            resizeMode="contain"
-                        />
-                    </View>
-                    <TouchableOpacity
-                        style={styles.modalCloseBtn}
-                        activeOpacity={0.7}
-                        onPress={() => setPreviewImage(null)}
-                    >
-                        <Ionicons name="close" size={26} color={Colors.white} />
-                    </TouchableOpacity>
-                </View>
-            )}
+            {/* Image Preview Overlay */}
+            <ImagePreviewOverlay
+                previewImage={previewImage}
+                onClose={() => setPreviewImage(null)}
+            />
 
             {/* Customer Reviews Modal */}
             <UserReviewsModal
@@ -824,5 +607,3 @@ export default function JobDetailBottomSheet({
         </View>
     );
 }
-
-

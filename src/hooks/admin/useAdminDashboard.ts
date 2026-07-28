@@ -78,9 +78,9 @@ export function useAdminDashboard() {
   };
 
   const stats: DashboardStats = {
-    totalUsers: 5, // Default or fetched from user service
-    totalPros: 2,
-    verifiedPros: 1,
+    totalUsers: 0,
+    totalPros: 0,
+    verifiedPros: 0,
     totalTasks: tasksQuery.data?.length || 0,
     openTasks: openTasksQuery.data?.length || 0,
     totalReviews: reviewsQuery.data?.length || 0,

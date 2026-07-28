@@ -15,9 +15,11 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { loginUser } from '@/services/user';
+import { loginUser, LoginResponse } from '@/services/user';
+import { API_URL } from '@/services/fetchClient';
 import { useAuth } from '@/context/auth';
-import { USER_TYPE_ADMIN, USER_TYPE_PRO } from '@/constants/userTypes';
+import { useRouteByUserType } from '@/hooks/useRouteByUserType';
+import { logger } from '@/utils/logger';
 import AuthHeader from '@/components/auth/AuthHeader';
 import PhoneInputField from '@/components/auth/PhoneInputField';
 import PasswordInputField from '@/components/auth/PasswordInputField';
@@ -40,6 +42,7 @@ export default function SignInScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { login } = useAuth();
+  const { routeAfterAuth } = useRouteByUserType();
   const [loadingStep, setLoadingStep] = useState<string | null>(null);
 
   const {
@@ -59,20 +62,19 @@ export default function SignInScreen() {
     try {
       setLoadingStep('Authenticating credentials...');
       const formattedPhone = `+92${data.phone}`;
-      const userInfo = await loginUser(formattedPhone, data.password);
+      const userInfo: LoginResponse = await loginUser(formattedPhone, data.password);
 
       setLoadingStep('Fetching user profile...');
-      const token = (userInfo as any).access || (userInfo as any).access_token || (userInfo as any).token;
-      const refreshToken = (userInfo as any).refresh || (userInfo as any).refresh_token;
-      const userDetails = (userInfo as any).user || userInfo;
+      const token = userInfo.access || userInfo.access_token || userInfo.token;
+      const refreshToken = userInfo.refresh || userInfo.refresh_token;
+      const userDetails = userInfo.user || userInfo;
 
       if (!userDetails || !userDetails.id) {
         throw new Error('Login failed. Invalid user data received from server.');
       }
 
       const rawPic = userDetails.profile_pic || userDetails.image;
-      const BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
-      const profilePicUrl = rawPic ? (rawPic.startsWith('http') ? rawPic : `${BASE}${rawPic}`) : undefined;
+      const profilePicUrl = rawPic ? (rawPic.startsWith('http') ? rawPic : `${API_URL}${rawPic}`) : undefined;
 
       const appUser = {
         uid: userDetails.id.toString(),
@@ -87,23 +89,17 @@ export default function SignInScreen() {
         location_id: userDetails.location_id,
         overall_rating: userDetails.overall_rating,
         profile_pic: profilePicUrl,
-        token: token,
-        refreshToken: refreshToken,
+        token,
+        refreshToken,
       };
 
       setLoadingStep('Syncing session...');
       await login(appUser, data.password);
 
       setLoadingStep('Redirecting...');
-      if (appUser.usertype_id === USER_TYPE_ADMIN) {
-        router.replace('/(protected)/(admin)/dashboard');
-      } else if (appUser.usertype_id === USER_TYPE_PRO) {
-        router.replace('/(protected)/(pro)/dashboard');
-      } else {
-        router.replace('/(protected)/(client)/home');
-      }
+      routeAfterAuth(appUser);
     } catch (err: any) {
-      console.log('Sign in error: ', err);
+      logger.log('Sign in error: ', err);
       setError('root', { message: err.message || 'An error occurred signing in' });
     } finally {
       setLoadingStep(null);

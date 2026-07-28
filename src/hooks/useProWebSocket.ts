@@ -2,14 +2,15 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { AppState, AppStateStatus, Platform, ToastAndroid, Alert } from 'react-native';
 import { getLocationById } from '@/services/location';
 import { getCustomerProfile, normalizeImageUrl } from '@/services/customer';
-import { getTaskAttachments, getOpenTasksFromBackend } from '@/services/task';
-
+import { getOpenTasksFromBackend } from '@/services/task';
+import { useAuth } from '@/context/auth';
 import { LiveJob } from '@/types';
 import useCategoryStore from '@/store/categoryStore';
+import { logger } from '@/utils/logger';
+
 export { LiveJob };
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
-// Convert http(s) → ws(s)
 const WS_BASE = BASE_URL
     .replace(/\/$/, '')
     .replace(/^https/, 'wss')
@@ -43,8 +44,6 @@ type WSMessage =
 
 export type WSStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
 
-import { useAuth } from '@/context/auth';
-
 interface UseProWebSocketOptions {
     userId?: number | undefined;
     isOnline: boolean;
@@ -61,6 +60,62 @@ interface UseProWebSocketResult {
 const MAX_RETRY_DELAY_MS = 30_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 
+/**
+ * Shared helper to fetch customer profile and location concurrently,
+ * then update the job item in component state.
+ */
+async function enrichJobDetails(
+    taskId: number,
+    createdBy: number | undefined,
+    locationId: number | undefined,
+    fallbackCustomerName: string | undefined,
+    isMountedRef: React.MutableRefObject<boolean>,
+    setJobs: React.Dispatch<React.SetStateAction<LiveJob[]>>
+) {
+    const [profileResult, locationResult] = await Promise.allSettled([
+        createdBy ? getCustomerProfile(createdBy) : Promise.resolve(null),
+        locationId ? getLocationById(locationId) : Promise.resolve(null),
+    ]);
+
+    if (!isMountedRef.current) return;
+
+    let updatedCustomerProfile: any = null;
+    let updatedCustomerName: string | undefined = undefined;
+    let updatedCustomerImage: string | undefined = undefined;
+    let updatedCustomerRating: number | undefined = undefined;
+    let updatedLocationName: string | undefined = undefined;
+
+    if (profileResult.status === 'fulfilled' && profileResult.value) {
+        const profile = profileResult.value;
+        const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
+        updatedCustomerName = fullName || fallbackCustomerName || 'Customer';
+        updatedCustomerImage = normalizeImageUrl(profile.image);
+        updatedCustomerRating = profile.overall_rating;
+        updatedCustomerProfile = profile;
+    }
+
+    if (locationResult.status === 'fulfilled' && locationResult.value) {
+        const loc = locationResult.value;
+        updatedLocationName = loc.formatted_address || 'Unknown Location';
+    }
+
+    setJobs((prev) =>
+        prev.map((j) => {
+            if (Number(j.id) !== Number(taskId)) return j;
+            return {
+                ...j,
+                customer_name: updatedCustomerName ?? j.customer_name,
+                customer_rating: updatedCustomerRating ?? j.customer_rating,
+                customer_image: updatedCustomerImage ?? j.customer_image,
+                customer_profile: updatedCustomerProfile ?? j.customer_profile,
+                is_customer_loading: false,
+                location_name: updatedLocationName ?? (locationId ? 'Location not found' : j.location_name),
+                is_location_loading: false,
+            };
+        })
+    );
+}
+
 export function useProWebSocket({
     userId: passedUserId,
     isOnline,
@@ -72,7 +127,7 @@ export function useProWebSocket({
     const [wsStatus, setWsStatus] = useState<WSStatus>('disconnected');
     const [hasNoJobs, setHasNoJobs] = useState(false);
 
-    const { ensureCategories, getCategoryById, getStyleById, getCategoryAndSubcategoryBySubId } = useCategoryStore();
+    const { ensureCategories, getStyleById, getCategoryAndSubcategoryBySubId } = useCategoryStore();
 
     const onTaskCancelledForWorkerRef = useRef(onTaskCancelledForWorker);
     onTaskCancelledForWorkerRef.current = onTaskCancelledForWorker;
@@ -102,7 +157,7 @@ export function useProWebSocket({
     const closeSocket = useCallback(() => {
         clearConnectTimeout();
         if (wsRef.current) {
-            wsRef.current.onclose = null; // prevent reconnect loop
+            wsRef.current.onclose = null;
             wsRef.current.onerror = null;
             wsRef.current.onmessage = null;
             wsRef.current.close();
@@ -112,17 +167,17 @@ export function useProWebSocket({
 
     const connect = useCallback(() => {
         if (!isMountedRef.current || !userId || !shouldConnectRef.current) return;
-        if (wsRef.current) return; // already connected/connecting
+        if (wsRef.current) return;
 
         const url = `${WS_BASE}/ws/tasks/`;
-        console.log('[useProWebSocket] Connecting to:', url);
+        logger.log('[useProWebSocket] Connecting to:', url);
         setWsStatus('connecting');
 
         clearConnectTimeout();
         connectTimeoutRef.current = setTimeout(() => {
             if (!isMountedRef.current || !shouldConnectRef.current) return;
             if (wsRef.current && wsRef.current.readyState !== WebSocket.OPEN) {
-                console.warn('[useProWebSocket] WebSocket connection timed out after 2000ms. Re-establishing socket...');
+                logger.warn('[useProWebSocket] WebSocket connection timed out after 2000ms. Re-establishing socket...');
                 closeSocket();
                 setWsStatus('reconnecting');
                 retryDelayRef.current = INITIAL_RETRY_DELAY_MS;
@@ -138,10 +193,9 @@ export function useProWebSocket({
         ws.onopen = () => {
             clearConnectTimeout();
             if (!isMountedRef.current) return;
-            console.log('[useProWebSocket] Connected');
+            logger.log('[useProWebSocket] Connected');
             setWsStatus('connected');
             retryDelayRef.current = INITIAL_RETRY_DELAY_MS;
-            // Ensure categories are loaded so we can map category_id → name/style
             ensureCategories();
         };
 
@@ -149,7 +203,7 @@ export function useProWebSocket({
             if (!isMountedRef.current) return;
             try {
                 const msg: WSMessage = JSON.parse(event.data);
-                console.log('[useProWebSocket] Message received:', msg);
+                logger.log('[useProWebSocket] Message received:', msg);
 
                 if (msg.type === 'task_created' && msg.task) {
                     const t = msg.task;
@@ -183,54 +237,8 @@ export function useProWebSocket({
                         return [newJob, ...prev];
                     });
 
-                    // Batch fetch customer profile and location concurrently via Promise.allSettled
-                    (async () => {
-                        const [profileResult, locationResult] = await Promise.allSettled([
-                            t.created_by ? getCustomerProfile(t.created_by) : Promise.resolve(null),
-                            t.location_id ? getLocationById(t.location_id) : Promise.resolve(null),
-                        ]);
-
-                        if (!isMountedRef.current) return;
-
-                        let updatedCustomerProfile: any = null;
-                        let updatedCustomerName: string | undefined = undefined;
-                        let updatedCustomerImage: string | undefined = undefined;
-                        let updatedCustomerRating: number | undefined = undefined;
-                        let updatedLocationName: string | undefined = undefined;
-
-                        // Process Customer Profile
-                        if (profileResult.status === 'fulfilled' && profileResult.value) {
-                            const profile = profileResult.value;
-                            const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
-                            updatedCustomerName = fullName || t.customer_name || 'Customer';
-                            updatedCustomerImage = normalizeImageUrl(profile.image);
-                            updatedCustomerRating = profile.overall_rating;
-                            updatedCustomerProfile = profile;
-                        }
-
-                        // Process Location
-                        if (locationResult.status === 'fulfilled' && locationResult.value) {
-                            const loc = locationResult.value;
-                            updatedLocationName = loc.formatted_address || 'Unknown Location';
-                        }
-
-                        // Batch update state in a single call
-                        setJobs((prev) =>
-                            prev.map((j) => {
-                                if (j.id !== t.id) return j;
-                                return {
-                                    ...j,
-                                    customer_name: updatedCustomerName ?? j.customer_name,
-                                    customer_rating: updatedCustomerRating ?? j.customer_rating,
-                                    customer_image: updatedCustomerImage ?? j.customer_image,
-                                    customer_profile: updatedCustomerProfile ?? j.customer_profile,
-                                    is_customer_loading: false,
-                                    location_name: updatedLocationName ?? (t.location_id ? 'Location not found' : j.location_name),
-                                    is_location_loading: false,
-                                };
-                            })
-                        );
-                    })();
+                    // Enrich customer profile & location details
+                    enrichJobDetails(t.id, t.created_by, t.location_id, t.customer_name, isMountedRef, setJobs);
                 }
 
                 const closedTypes = ['task_assigned', 'task_accepted', 'bidding_closed', 'task_closed', 'task_deleted', 'task_cancelled'];
@@ -239,16 +247,16 @@ export function useProWebSocket({
                     const msgWorkerId = (msg as any).worker_id;
 
                     if (closedTaskId) {
-                        console.log(`[useProWebSocket] Removing closed/assigned task ${closedTaskId} from live jobs feed.`);
+                        logger.log(`[useProWebSocket] Removing closed/assigned task ${closedTaskId} from live jobs feed.`);
                         setJobs((prev) => prev.filter((j) => Number(j.id) !== Number(closedTaskId)));
 
                         if (
-                            (msg.type === 'task_deleted') &&
+                            msg.type === 'task_deleted' &&
                             msgWorkerId &&
                             userId &&
                             String(msgWorkerId) === String(userId)
                         ) {
-                            console.log(`[useProWebSocket] Task ${closedTaskId} assigned to worker ${userId} was cancelled by customer.`);
+                            logger.log(`[useProWebSocket] Task ${closedTaskId} assigned to worker ${userId} was cancelled by customer.`);
                             if (Platform.OS === 'android') {
                                 ToastAndroid.show('A task assigned to you was cancelled by the customer.', ToastAndroid.LONG);
                             } else {
@@ -258,46 +266,44 @@ export function useProWebSocket({
                         }
                     }
                 }
-                // 'ping' → no-op (heartbeat keepalive)
             } catch (e) {
-                console.warn('[useProWebSocket] Failed to parse message:', e);
+                logger.warn('[useProWebSocket] Failed to parse message:', e);
             }
         };
 
         ws.onerror = (error) => {
-            console.error('[useProWebSocket] WebSocket error:', error);
+            logger.error('[useProWebSocket] WebSocket error:', error);
         };
 
         ws.onclose = (event) => {
             if (!isMountedRef.current) return;
             wsRef.current = null;
-            console.log('[useProWebSocket] Connection closed. Code:', event.code);
+            logger.log('[useProWebSocket] Connection closed. Code:', event.code);
 
             if (!shouldConnectRef.current) {
                 setWsStatus('disconnected');
                 return;
             }
 
-            // Exponential backoff reconnect
             setWsStatus('reconnecting');
             const delay = retryDelayRef.current;
             retryDelayRef.current = Math.min(delay * 2, MAX_RETRY_DELAY_MS);
-            console.log(`[useProWebSocket] Reconnecting in ${delay}ms...`);
+            logger.log(`[useProWebSocket] Reconnecting in ${delay}ms...`);
             retryTimerRef.current = setTimeout(() => {
                 connect();
             }, delay);
         };
-    }, [userId]);
+    }, [userId, closeSocket, ensureCategories, getCategoryAndSubcategoryBySubId, getStyleById]);
 
     const fetchOpenJobs = useCallback(async () => {
         if (!isMountedRef.current || !shouldConnectRef.current) return;
-        console.log('[useProWebSocket] Fetching open jobs from /app/task/open/ API...');
+        logger.log('[useProWebSocket] Fetching open jobs from /app/task/open/ API...');
         try {
             await ensureCategories();
             const openTasks = await getOpenTasksFromBackend();
             if (!isMountedRef.current || !shouldConnectRef.current) return;
 
-            console.log(`[useProWebSocket] Fetched ${openTasks.length} open tasks from backend.`);
+            logger.log(`[useProWebSocket] Fetched ${openTasks.length} open tasks from backend.`);
 
             if (openTasks.length === 0) {
                 setJobs([]);
@@ -339,62 +345,18 @@ export function useProWebSocket({
                 return [...extraWsJobs, ...initialJobs];
             });
 
-            // Concurrently enrich details (customer profile and location)
+            // Concurrently enrich details (customer profile and location) for all open tasks
             await Promise.allSettled(
                 openTasks.map(async (t) => {
                     if (!t.id) return;
-                    const taskId = t.id;
-
-                    const [profileResult, locationResult] = await Promise.allSettled([
-                        t.created_by ? getCustomerProfile(t.created_by) : Promise.resolve(null),
-                        t.location_id ? getLocationById(t.location_id) : Promise.resolve(null),
-                    ]);
-
-                    if (!isMountedRef.current) return;
-
-                    let updatedCustomerProfile: any = null;
-                    let updatedCustomerName: string | undefined = undefined;
-                    let updatedCustomerImage: string | undefined = undefined;
-                    let updatedCustomerRating: number | undefined = undefined;
-                    let updatedLocationName: string | undefined = undefined;
-
-                    if (profileResult.status === 'fulfilled' && profileResult.value) {
-                        const profile = profileResult.value;
-                        const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
-                        updatedCustomerName = fullName || (t as any).customer_name || 'Customer';
-                        updatedCustomerImage = normalizeImageUrl(profile.image);
-                        updatedCustomerRating = profile.overall_rating;
-                        updatedCustomerProfile = profile;
-                    }
-
-                    if (locationResult.status === 'fulfilled' && locationResult.value) {
-                        const loc = locationResult.value;
-                        updatedLocationName = loc.formatted_address || 'Unknown Location';
-                    }
-
-                    setJobs((prev) =>
-                        prev.map((j) => {
-                            if (Number(j.id) !== Number(taskId)) return j;
-                            return {
-                                ...j,
-                                customer_name: updatedCustomerName ?? j.customer_name,
-                                customer_rating: updatedCustomerRating ?? j.customer_rating,
-                                customer_image: updatedCustomerImage ?? j.customer_image,
-                                customer_profile: updatedCustomerProfile ?? j.customer_profile,
-                                is_customer_loading: false,
-                                location_name: updatedLocationName ?? (t.location_id ? 'Location not found' : j.location_name),
-                                is_location_loading: false,
-                            };
-                        })
-                    );
+                    await enrichJobDetails(t.id, t.created_by, t.location_id, (t as any).customer_name, isMountedRef, setJobs);
                 })
             );
         } catch (err) {
-            console.error('[useProWebSocket] Error fetching open jobs from API:', err);
+            logger.error('[useProWebSocket] Error fetching open jobs from API:', err);
         }
-    }, [ensureCategories, getCategoryById, getStyleById]);
+    }, [ensureCategories, getCategoryAndSubcategoryBySubId, getStyleById]);
 
-    // Connect / disconnect when isOnline or userId changes
     useEffect(() => {
         shouldConnectRef.current = isOnline && !!userId;
 
@@ -410,14 +372,12 @@ export function useProWebSocket({
         }
     }, [isOnline, userId, connect, closeSocket, fetchOpenJobs]);
 
-    // Handle app foreground / background transitions
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
             const prev = appStateRef.current;
             appStateRef.current = nextState;
 
             if (prev.match(/inactive|background/) && nextState === 'active') {
-                // App came to foreground — reconnect if needed
                 if (shouldConnectRef.current && !wsRef.current) {
                     clearRetryTimer();
                     retryDelayRef.current = INITIAL_RETRY_DELAY_MS;
@@ -425,7 +385,6 @@ export function useProWebSocket({
                     fetchOpenJobs();
                 }
             } else if (nextState.match(/inactive|background/)) {
-                // App went to background — disconnect to save battery
                 clearRetryTimer();
                 closeSocket();
             }
@@ -434,7 +393,6 @@ export function useProWebSocket({
         return () => subscription.remove();
     }, [connect, closeSocket, fetchOpenJobs]);
 
-    // Cleanup on unmount
     useEffect(() => {
         isMountedRef.current = true;
         return () => {
@@ -447,14 +405,13 @@ export function useProWebSocket({
 
     const refresh = useCallback(async () => {
         if (!shouldConnectRef.current) return;
-        console.log('[useProWebSocket] Refresh triggered: restarting socket and refetching open jobs...');
+        logger.log('[useProWebSocket] Refresh triggered: restarting socket and refetching open jobs...');
         clearRetryTimer();
         closeSocket();
         retryDelayRef.current = INITIAL_RETRY_DELAY_MS;
         connect();
         await fetchOpenJobs();
     }, [connect, closeSocket, fetchOpenJobs]);
-
 
     return { jobs, wsStatus, hasNoJobs, refresh };
 }

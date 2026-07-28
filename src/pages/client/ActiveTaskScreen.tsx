@@ -31,6 +31,8 @@ import ReviewModal from '@/components/ReviewModal';
 import { styles } from '@/styles/activeTaskScreen.styles';
 import UserReviewsModal from '@/components/UserReviewsModal';
 import { getUserReviews } from '@/services/user';
+import { ClientChatModal } from '@/components/client/ClientChatModal';
+import { CancelProgressModal } from '@/components/client/CancelProgressModal';
 
 const { width } = Dimensions.get('window');
 
@@ -587,92 +589,19 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
 
         {/* Temporary Chat Modal */}
         {activeTask.status === 'accepted' && activeTask.acceptedBid && (
-          <Modal
+          <ClientChatModal
             visible={chatVisible}
-            animationType="slide"
-            onRequestClose={() => setChatVisible(false)}
-          >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.chatRoomContainer}
-            >
-              {/* Chat Modal Header */}
-              <View style={chatHeaderStyle}>
-                <Pressable onPress={() => setChatVisible(false)} style={styles.modalBackBtn}>
-                  <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-                </Pressable>
-                <Image source={{ uri: activeTask.acceptedBid.avatar }} style={styles.modalAvatar} />
-                <View style={styles.modalHeaderDetails}>
-                  <Text style={styles.modalName}>{activeTask.acceptedBid.name}</Text>
-                  <Text style={styles.modalStatus}>Active session</Text>
-                </View>
-                <Pressable onPress={() => handleCall(activeTask.acceptedBid)} style={styles.modalCallBtn}>
-                  <Ionicons name="call" size={20} color="#FFFFFF" />
-                </Pressable>
-              </View>
-
-              {/* Chat Messages */}
-              <ScrollView
-                style={styles.chatMessagesList}
-                contentContainerStyle={{ padding: 16, paddingBottom: 25 }}
-                ref={(ref) => {
-                  // Keep scrolled to bottom
-                }}
-              >
-                <View style={styles.systemMessagePill}>
-                  <Text style={styles.systemMessageText}>
-                    Messages are temporary and will be cleared once this task ends.
-                  </Text>
-                </View>
-
-                {activeChatMessages.map((msg) => {
-                  const isUser = msg.sender === 'user';
-                  return (
-                    <View
-                      key={msg.id}
-                      style={[
-                        styles.messageBubbleContainer,
-                        isUser ? styles.messageUser : styles.messageOther,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.messageBubble,
-                          isUser ? styles.bubbleUser : styles.bubbleOther,
-                        ]}
-                      >
-                        <Text style={isUser ? styles.bubbleUserText : styles.bubbleOtherText}>
-                          {msg.text}
-                        </Text>
-                      </View>
-                      <Text style={styles.messageTime}>{msg.time}</Text>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-
-              {/* Input Bar */}
-              <View style={chatInputStyle}>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Type a message..."
-                  placeholderTextColor="#9CA3AF"
-                  value={chatInput}
-                  onChangeText={setChatInput}
-                />
-                <Pressable
-                  style={[
-                    styles.sendBtn,
-                    chatInput.trim() === '' ? styles.sendBtnDisabled : styles.sendBtnEnabled,
-                  ]}
-                  onPress={handleSendChat}
-                  disabled={chatInput.trim() === ''}
-                >
-                  <Ionicons name="send" size={18} color="#FFFFFF" />
-                </Pressable>
-              </View>
-            </KeyboardAvoidingView>
-          </Modal>
+            onClose={() => setChatVisible(false)}
+            proAvatar={activeTask.acceptedBid.avatar}
+            proName={activeTask.acceptedBid.name}
+            onCall={() => handleCall(activeTask.acceptedBid!)}
+            activeChatMessages={activeChatMessages}
+            chatInput={chatInput}
+            setChatInput={setChatInput}
+            onSendChat={handleSendChat}
+            insetsTop={insets.top}
+            insetsBottom={insets.bottom}
+          />
         )}
 
         {/* Customer Review Modal */}
@@ -690,15 +619,7 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
         />
 
         {/* Progressive Cancellation Overlay */}
-        <Modal visible={isCancelling} transparent animationType="fade">
-          <View style={styles.cancelOverlay}>
-            <View style={styles.cancelCard}>
-              <ActivityIndicator size="large" color="#EF4444" style={{ marginBottom: 16 }} />
-              <Text style={styles.cancelTitle}>Cancelling Task...</Text>
-              <Text style={styles.cancelStepText}>{cancellationStep}</Text>
-            </View>
-          </View>
-        </Modal>
+        <CancelProgressModal visible={isCancelling} stepText={cancellationStep} />
 
         {/* Pro Reviews Modal */}
         <UserReviewsModal

@@ -8,6 +8,9 @@ import {
   getTaskByIdFromBackend,
 } from '@/services/task';
 import useTaskStore from '../store/taskStore';
+import { TASK_STATUS } from '@/constants/taskStatus';
+import { mapBackendTaskToLocal } from '@/utils/taskMapper';
+import { logger } from '@/utils/logger';
 import { Bid, Task, ChatMessage } from '@/types';
 export { Bid, Task, ChatMessage };
 
@@ -77,13 +80,11 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
   const [isCreatingTask, setIsCreatingTask] = useState<boolean>(false);
   const [creationStep, setCreationStep] = useState<string>('');
 
-  const syncedUsersRef = useRef<Set<number>>(new Set());
-
   const biddingTimer = useRef<NodeJS.Timeout | null>(null);
   const chatGreetingTimer = useRef<NodeJS.Timeout | null>(null);
   const chatReplyTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Handle user account switching (loads from MMKV cache instantly) & sync active task from backend
+  // Handle user account switching & sync active task from backend
   useEffect(() => {
     const userId = user?.id;
     if (!userId) {
@@ -95,38 +96,14 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
     (async () => {
       try {
-        console.log(`[PostJobProvider] Syncing customer tasks from backend (/app/task/customer/${userId}/)...`);
+        logger.log(`[PostJobProvider] Syncing customer tasks from backend (/app/task/customer/${userId}/)...`);
         const backendTasks = await getUserTasksFromBackend(userId);
         if (!isMounted) return;
 
         const currentActive = useTaskStore.getState().activeTask;
 
         if (Array.isArray(backendTasks) && backendTasks.length > 0) {
-          const mappedTasks: Task[] = backendTasks.map((bt) => {
-            let status: Task['status'] = 'searching';
-            if (bt.status_id === 4) {
-              status = 'completed';
-            } else if (bt.status_id === 5 || bt.status_id === 3) {
-              status = 'cancelled';
-            } else if (bt.status_id === 2) {
-              status = 'accepted';
-            } else {
-              status = 'bidding';
-            }
-
-            return {
-              id: bt.id ? bt.id.toString() : Date.now().toString(),
-              backend_id: bt.id,
-              category: bt.subject || 'General Task',
-              description: bt.body || '',
-              budget: bt.price || 0,
-              locationName: 'Specified Location',
-              paymentPref: 'Cash',
-              status,
-              createdAt: bt.created_at || new Date().toISOString(),
-            };
-          });
-
+          const mappedTasks: Task[] = backendTasks.map(mapBackendTaskToLocal);
           setTaskHistory(mappedTasks);
 
           // Find active tasks (status is searching, bidding, or accepted)
@@ -135,45 +112,38 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
           );
 
           if (activeBackendTasks.length > 0) {
-            // Sort by backend_id descending to select the latest active task
             activeBackendTasks.sort((a, b) => (b.backend_id || 0) - (a.backend_id || 0));
             const latestActive = activeBackendTasks[0];
 
             if (!currentActive || currentActive.backend_id !== latestActive.backend_id || currentActive.status !== latestActive.status) {
-              console.log(`[PostJobProvider] Linked active task from backend: ID ${latestActive.backend_id}`);
+              logger.log(`[PostJobProvider] Linked active task from backend: ID ${latestActive.backend_id}`);
               setStoreActiveTask({
                 ...latestActive,
                 ...(currentActive && currentActive.backend_id === latestActive.backend_id ? currentActive : {}),
                 status: latestActive.status,
               });
             }
-          } else {
-            // No active task on backend - clear local active task if linked to backend
-            if (currentActive && currentActive.backend_id) {
-              console.log('[PostJobProvider] Clearing active task as backend reports no active tasks.');
-              setStoreActiveTask(null);
-            }
-          }
-        } else {
-          // Backend returned no tasks array or empty list - clear stale MMKV active task
-          if (currentActive && currentActive.backend_id) {
-            console.log('[PostJobProvider] Backend returned 0 tasks. Clearing stale MMKV active task.');
+          } else if (currentActive?.backend_id) {
+            logger.log('[PostJobProvider] Clearing active task as backend reports no active tasks.');
             setStoreActiveTask(null);
           }
+        } else if (currentActive?.backend_id) {
+          logger.log('[PostJobProvider] Backend returned 0 tasks. Clearing stale MMKV active task.');
+          setStoreActiveTask(null);
         }
 
-        // Additional explicit check: if currentActive exists with a backend_id, verify that specific task
+        // Verify current active task still exists on backend
         const updatedCurrentActive = useTaskStore.getState().activeTask;
-        if (updatedCurrentActive && updatedCurrentActive.backend_id) {
+        if (updatedCurrentActive?.backend_id) {
           const singleTask = await getTaskByIdFromBackend(updatedCurrentActive.backend_id);
           if (!isMounted) return;
-          if (!singleTask || singleTask.status_id === 5 || singleTask.status_id === 3) {
-            console.log(`[PostJobProvider] Active task ${updatedCurrentActive.backend_id} is deleted/cancelled on backend. Clearing MMKV.`);
+          if (!singleTask || singleTask.status_id === TASK_STATUS.CANCELLED || singleTask.status_id === TASK_STATUS.CANCELLED_BY_SYSTEM) {
+            logger.log(`[PostJobProvider] Active task ${updatedCurrentActive.backend_id} is deleted/cancelled on backend. Clearing MMKV.`);
             setStoreActiveTask(null);
           }
         }
       } catch (err) {
-        console.warn('[PostJobProvider] Sync customer tasks API call failed:', err);
+        logger.warn('[PostJobProvider] Sync customer tasks API call failed:', err);
       }
     })();
 
@@ -219,7 +189,7 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
     attachmentUris?: string[] | null
   ) => {
     if (activeTask && (activeTask.status === 'searching' || activeTask.status === 'bidding' || activeTask.status === 'accepted')) {
-      console.warn('[PostJobProvider] Blocked creating second task: active task already in progress.');
+      logger.warn('[PostJobProvider] Blocked creating second task: active task already in progress.');
       return;
     }
 
@@ -250,17 +220,6 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
     if (userId) {
       (async () => {
         try {
-          console.log('[PostJobProvider] Dispatching createTaskChain with:', {
-            subcategoryId,
-            categoryName,
-            subcategoryName,
-            paymentPreferenceId,
-            budget,
-            userId,
-            locationId,
-            attachmentUris,
-          });
-
           if (attachmentUris && attachmentUris.length > 0) {
             setCreationStep('Uploading attachments & pictures...');
           }
@@ -276,11 +235,11 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
             locationId,
             attachmentUris,
           });
-          console.log('[PostJobProvider] Backend task created successfully. ID:', createdBackend.id);
+          logger.log('[PostJobProvider] Backend task created successfully. ID:', createdBackend.id);
 
           setCreationStep('Connecting to live bidding network...');
 
-          if (createdBackend && createdBackend.id) {
+          if (createdBackend?.id) {
             const realId = createdBackend.id;
             setActiveTask((prev) => {
               if (!prev) return prev;
@@ -302,7 +261,7 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
           setIsCreatingTask(false);
           setCreationStep('');
         } catch (err: any) {
-          console.error('[PostJobProvider] Failed to submit task to backend database:', err);
+          logger.error('[PostJobProvider] Failed to submit task to backend database:', err);
           setIsCreatingTask(false);
           setCreationStep('');
           setActiveTask(null);
@@ -313,7 +272,7 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
         }
       })();
     } else {
-      console.warn('[PostJobProvider] Cannot dispatch backend createTask: missing user ID.');
+      logger.warn('[PostJobProvider] Cannot dispatch backend createTask: missing user ID.');
       setIsCreatingTask(false);
     }
 
@@ -332,11 +291,11 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
     if (taskId) {
       try {
         onProgress?.('Cancelling request on server...');
-        console.log('[PostJobProvider] Soft-deleting backend task with ID:', taskId);
+        logger.log('[PostJobProvider] Soft-deleting backend task with ID:', taskId);
         await softDeleteTaskOnBackend(taskId);
-        console.log('[PostJobProvider] Backend task soft-deleted successfully.');
+        logger.log('[PostJobProvider] Backend task soft-deleted successfully.');
       } catch (deleteErr) {
-        console.warn('[PostJobProvider] Soft-delete task API call warning:', deleteErr);
+        logger.warn('[PostJobProvider] Soft-delete task API call warning:', deleteErr);
       }
     }
 
@@ -415,24 +374,26 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
 
     setActiveChatMessages((prev) => [...prev, newMsg]);
 
-    // Simulate reply after 1.5s
-    if (chatReplyTimer.current) clearTimeout(chatReplyTimer.current);
-    chatReplyTimer.current = setTimeout(() => {
-      const replies = [
-        "Sounds good! I'll be there in a bit.",
-        "Got it, thanks for letting me know.",
-        "Understood, I am on my way.",
-        "Perfect. I am driving right now, will arrive soon.",
-      ];
-      const randomReply = replies[Math.floor(Math.random() * replies.length)];
-      const replyMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        text: randomReply,
-        sender: 'professional',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setActiveChatMessages((prev) => [...prev, replyMsg]);
-    }, 1500);
+    // Simulated reply — only active in development builds
+    if (__DEV__) {
+      if (chatReplyTimer.current) clearTimeout(chatReplyTimer.current);
+      chatReplyTimer.current = setTimeout(() => {
+        const replies = [
+          "Sounds good! I'll be there in a bit.",
+          "Got it, thanks for letting me know.",
+          "Understood, I am on my way.",
+          "Perfect. I am driving right now, will arrive soon.",
+        ];
+        const randomReply = replies[Math.floor(Math.random() * replies.length)];
+        const replyMsg: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          text: randomReply,
+          sender: 'professional',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setActiveChatMessages((prev) => [...prev, replyMsg]);
+      }, 1500);
+    }
   };
 
   const clearHistory = () => {

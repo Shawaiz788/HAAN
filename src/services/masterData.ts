@@ -1,7 +1,4 @@
-import { fetchWithAuth } from './fetchClient';
-
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
-const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
+import { fetchWithAuth, API_URL } from './fetchClient';
 
 async function fetchList<T>(endpoint: string): Promise<T[]> {
   const response = await fetchWithAuth(`${API_URL}/app/${endpoint}/`);

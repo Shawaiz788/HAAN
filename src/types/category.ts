@@ -4,12 +4,15 @@ export interface Category {
   color?: string;
   image?: string; // Ionicons icon key (e.g. 'flash', 'build')
   commission_rate?: number;
-  commissionRate?: number;
   is_active?: boolean;
-  active?: boolean;
   total_jobs?: number;
-  totalJobs?: number;
   subcategories?: SubCategory[];
+  /** Alias for commission_rate */
+  commissionRate?: number;
+  /** Alias for is_active */
+  active?: boolean;
+  /** Alias for total_jobs */
+  totalJobs?: number;
 }
 
 export interface SubCategory {
@@ -20,6 +23,7 @@ export interface SubCategory {
   category_id?: number;
   category?: Category | { id?: number; name: string; color?: string; image?: string };
   base_price?: number;
+  /** Alias for base_price */
   basePrice?: number;
 }
 

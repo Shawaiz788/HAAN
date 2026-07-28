@@ -1,17 +1,19 @@
 import * as SecureStore from 'expo-secure-store';
-import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/auth';
-import { createUser, verifyUserOnBackend, loginUser } from '@/services/user';
+import { createUser, verifyUserOnBackend, loginUser, LoginResponse } from '@/services/user';
 import { useMutation } from '@tanstack/react-query';
 import { getOrCreateLocationChain } from '@/services/location';
 import { USER_TYPE_ADMIN, USER_TYPE_CLIENT, USER_TYPE_PRO } from '@/constants/userTypes';
 import { createProEarnings } from '@/services/proEarnings';
+import { useRouteByUserType } from '@/hooks/useRouteByUserType';
+import { AppUser } from '@/types';
+import { logger } from '@/utils/logger';
 
 type Role = 'client' | 'provider' | 'admin';
 
 interface UseProfileSubmitParams {
-  user?: any;
-  params: any;
+  user?: AppUser | null;
+  params: { password?: string; [key: string]: any };
   countryName: string | undefined;
   fullName: string;
   email: string;
@@ -52,8 +54,8 @@ export function useProfileSubmit({
   setIsLoading,
   setErrorMsg,
 }: UseProfileSubmitParams) {
-  const router = useRouter();
   const { login } = useAuth();
+  const { routeAfterAuth } = useRouteByUserType();
   const addMutation = useMutation({ mutationFn: createUser });
 
   const createUserRecord = async () => {
@@ -79,7 +81,7 @@ export function useProfileSubmit({
     if (latitude === null || longitude === null) throw new Error('Pin location / GPS coordinates are required.');
     if (!formattedAddress.trim()) throw new Error('Formatted address is required.');
 
-    console.log('[profile-setup] Resolving location chain...');
+    logger.log('[profile-setup] Resolving location chain...');
     const resolvedLoc = await getOrCreateLocationChain({
       countryName: countryName || 'Pakistan',
       cityName: selectedCity,
@@ -96,12 +98,13 @@ export function useProfileSubmit({
 
     const locationId = resolvedLoc.id;
     if (!locationId) throw new Error('Failed to resolve or create your location profile.');
-    console.log('[profile-setup] Resolved Location ID:', locationId);
+    logger.log('[profile-setup] Resolved Location ID:', locationId);
 
     const savedPassword = await SecureStore.getItemAsync('pending_signup_password');
-    console.log('[SecureStore] Loaded pending signup password string length:', savedPassword ? savedPassword.length : 0);
+    logger.log('[SecureStore] Loaded pending signup password string length:', savedPassword ? savedPassword.length : 0);
     const passwordToUse = savedPassword || (params.password as string);
 
+    // Let the backend set overall_rating — client should not dictate initial rating
     return await addMutation.mutateAsync({
       first_name,
       last_name,
@@ -111,7 +114,6 @@ export function useProfileSubmit({
       usertype_id,
       location_id: locationId,
       password: passwordToUse,
-      overall_rating: 5,
     });
   };
 
@@ -138,55 +140,48 @@ export function useProfileSubmit({
     setIsLoading(true);
 
     try {
-      console.log('[profile-setup] Starting CreateUser chain...');
+      logger.log('[profile-setup] Starting CreateUser chain...');
       const createdUser = await createUserRecord();
 
       const savedPassword = await SecureStore.getItemAsync('pending_signup_password');
       const passwordToUse = savedPassword || (params.password as string);
 
       await SecureStore.deleteItemAsync('pending_signup_password');
-      console.log('[SecureStore] Deleted pending signup password');
+      logger.log('[SecureStore] Deleted pending signup password');
 
       if (createdUser && user) {
-        let token =
-          (createdUser as any).access ||
-          (createdUser as any).access_token ||
-          (createdUser as any).token;
-        let refreshToken =
-          (createdUser as any).refresh || (createdUser as any).refresh_token;
+        let token = createdUser.access || createdUser.access_token || createdUser.token;
+        let refreshToken = createdUser.refresh || createdUser.refresh_token;
 
         if (!token && createdUser.phone_number && passwordToUse) {
           try {
-            console.log('[profile-setup] Registration did not return a JWT token. Programmatically logging in...');
-            const loginInfo = await loginUser(createdUser.phone_number, passwordToUse);
-            token =
-              (loginInfo as any).access ||
-              (loginInfo as any).access_token ||
-              (loginInfo as any).token;
-            refreshToken = (loginInfo as any).refresh || (loginInfo as any).refresh_token;
-            console.log('[profile-setup] Programmatic login complete. Token obtained.');
+            logger.log('[profile-setup] Registration did not return a JWT token. Programmatically logging in...');
+            const loginInfo: LoginResponse = await loginUser(createdUser.phone_number, passwordToUse);
+            token = loginInfo.access || loginInfo.access_token || loginInfo.token;
+            refreshToken = loginInfo.refresh || loginInfo.refresh_token;
+            logger.log('[profile-setup] Programmatic login complete. Token obtained.');
           } catch (loginErr) {
-            console.error('[profile-setup] Programmatic login failed:', loginErr);
+            logger.error('[profile-setup] Programmatic login failed:', loginErr);
           }
         }
 
-        if (createdUser && createdUser.id) {
+        if (createdUser.id) {
           try {
-            console.log(`[profile-setup] Auto-verifying new account on backend for User ID: ${createdUser.id}...`);
+            logger.log(`[profile-setup] Auto-verifying new account on backend for User ID: ${createdUser.id}...`);
             await verifyUserOnBackend(createdUser.id);
-            console.log('[profile-setup] Backend verification complete!');
+            logger.log('[profile-setup] Backend verification complete!');
           } catch (verifyErr) {
-            console.error('[profile-setup] Auto-verification on backend failed:', verifyErr);
+            logger.error('[profile-setup] Auto-verification on backend failed:', verifyErr);
           }
         }
 
-        if (createdUser && createdUser.id && (createdUser.usertype_id === USER_TYPE_PRO || createdUser.usertype_id === 2)) {
+        if (createdUser.id && createdUser.usertype_id === USER_TYPE_PRO) {
           try {
-            console.log(`[profile-setup] Initializing WorkerEarnings for Pro User ID: ${createdUser.id}...`);
+            logger.log(`[profile-setup] Initializing WorkerEarnings for Pro User ID: ${createdUser.id}...`);
             await createProEarnings(createdUser.id);
-            console.log('[profile-setup] WorkerEarnings initialized successfully!');
+            logger.log('[profile-setup] WorkerEarnings initialized successfully!');
           } catch (earningsErr) {
-            console.warn('[profile-setup] WorkerEarnings initialization warning:', earningsErr);
+            logger.warn('[profile-setup] WorkerEarnings initialization warning:', earningsErr);
           }
         }
 
@@ -206,18 +201,13 @@ export function useProfileSubmit({
           refreshToken,
         };
         await login(appUser, passwordToUse);
-      }
 
-      console.log('Profile setup saved successfully!');
-      if (createdUser && createdUser.usertype_id === USER_TYPE_ADMIN) {
-        router.replace('/(protected)/(admin)/dashboard');
-      } else if (createdUser && createdUser.usertype_id === USER_TYPE_PRO) {
-        router.replace('/(protected)/(pro)/dashboard');
-      } else {
-        router.replace('/(protected)/(client)/home');
+        logger.log('Profile setup saved successfully!');
+        routeAfterAuth(appUser);
+        return;
       }
     } catch (err: any) {
-      console.error('[profile-setup] Profile setup failed:', err);
+      logger.error('[profile-setup] Profile setup failed:', err);
       let friendlyMsg = 'Failed to save profile. Please try again.';
       const rawMsg = err?.message || '';
 

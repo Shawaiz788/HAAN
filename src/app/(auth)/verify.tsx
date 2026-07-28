@@ -9,6 +9,7 @@ import {
   TextInput,
   StatusBar,
   ActivityIndicator,
+  StyleSheet as RNStyleSheet,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
@@ -18,6 +19,9 @@ import { getAuth, PhoneAuthProvider, signInWithCredential, signInWithPhoneNumber
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/auth';
+import { USER_TYPE_CLIENT } from '@/constants/userTypes';
+import { Colors } from '@/constants/colors';
+import { logger } from '@/utils/logger';
 import { styles } from '@/styles/verify.styles';
 
 const verifySchema = z.object({
@@ -106,8 +110,7 @@ export default function VerifyScreen() {
         first_name: '',
         last_name: '',
         gender: '',
-        usertype_id: 2,
-        location_id: 1,
+        usertype_id: USER_TYPE_CLIENT,
       };
       await login(appUser);
 
@@ -121,7 +124,7 @@ export default function VerifyScreen() {
         },
       });
     } catch (err: any) {
-      console.log('Verification error: ', err);
+      logger.log('Verification error: ', err);
       setError('root', { message: err.message || 'Verification failed. Please try again.' });
       setIsLoading(false);
       setIsVerified(false);
@@ -151,7 +154,7 @@ export default function VerifyScreen() {
         setFeedbackType(null);
       }, 4000);
     } catch (err: any) {
-      console.log('Resend error: ', err);
+      logger.log('Resend error: ', err);
       setFeedbackType('error');
       setFeedbackMessage(err.message || 'Failed to resend verification code');
       setTimeout(() => {
@@ -163,8 +166,8 @@ export default function VerifyScreen() {
 
   if (isVerified) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0B5A3E' }}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
+      <View style={verifyLocalStyles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.white} />
       </View>
     );
   }
@@ -323,3 +326,12 @@ export default function VerifyScreen() {
     </View>
   );
 }
+
+const verifyLocalStyles = RNStyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.brand.dark,
+  },
+});

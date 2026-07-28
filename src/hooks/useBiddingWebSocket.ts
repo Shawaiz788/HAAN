@@ -1,7 +1,9 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { AppState, AppStateStatus, ToastAndroid, Alert, Platform } from 'react-native';
-//import { assignTaskWorker } from '@/services/task';
 import { getCustomerProfile, normalizeImageUrl } from '@/services/customer';
+import { useAuth } from '@/context/auth';
+import { USER_TYPE_CLIENT } from '@/constants/userTypes';
+import { logger } from '@/utils/logger';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 const WS_BASE = BASE_URL
@@ -81,7 +83,7 @@ export async function sendQuickBidViaWebSocket(
 
         const timeoutId = setTimeout(() => {
             if (!isSettled) {
-                console.warn('[sendQuickBidViaWebSocket] Timeout waiting for bid confirmation.');
+                logger.warn('[sendQuickBidViaWebSocket] Timeout waiting for bid confirmation.');
                 isSettled = true;
                 cleanup();
                 reject(new Error('Response timeout from server.'));
@@ -90,7 +92,7 @@ export async function sendQuickBidViaWebSocket(
 
         try {
             const url = `${WS_BASE}/ws/bidding/${taskId}/`;
-            console.log('[sendQuickBidViaWebSocket] Opening quick socket connection to:', url);
+            logger.log('[sendQuickBidViaWebSocket] Opening quick socket connection to:', url);
             ws = new WebSocket(url);
 
             ws.onopen = () => {
@@ -100,7 +102,7 @@ export async function sendQuickBidViaWebSocket(
                     price,
                     estimated_hours: estimatedHours,
                 };
-                console.log('[sendQuickBidViaWebSocket] Sending payload:', payload);
+                logger.log('[sendQuickBidViaWebSocket] Sending payload:', payload);
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify(payload));
                 }
@@ -109,7 +111,7 @@ export async function sendQuickBidViaWebSocket(
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    console.log('[sendQuickBidViaWebSocket] Received message:', data);
+                    logger.log('[sendQuickBidViaWebSocket] Received message:', data);
                     if (data.type === 'bid_placed' && String(data.bid?.user_id) === String(userId)) {
                         if (!isSettled) {
                             isSettled = true;
@@ -124,12 +126,12 @@ export async function sendQuickBidViaWebSocket(
                         }
                     }
                 } catch (e) {
-                    console.warn('[sendQuickBidViaWebSocket] Error parsing response message:', e);
+                    logger.warn('[sendQuickBidViaWebSocket] Error parsing response message:', e);
                 }
             };
 
             ws.onerror = (err) => {
-                console.error('[sendQuickBidViaWebSocket] Quick bid socket error:', err);
+                logger.error('[sendQuickBidViaWebSocket] Quick bid socket error:', err);
                 if (!isSettled) {
                     isSettled = true;
                     cleanup();
@@ -138,7 +140,7 @@ export async function sendQuickBidViaWebSocket(
             };
 
             ws.onclose = (event) => {
-                console.log(`[sendQuickBidViaWebSocket] Quick bid socket closed. Code: ${event.code}`);
+                logger.log(`[sendQuickBidViaWebSocket] Quick bid socket closed. Code: ${event.code}`);
                 if (!isSettled) {
                     isSettled = true;
                     cleanup();
@@ -157,9 +159,6 @@ export async function sendQuickBidViaWebSocket(
 
 const MAX_RETRY_DELAY_MS = 30_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
-
-import { useAuth } from '@/context/auth';
-import { USER_TYPE_CLIENT } from '@/constants/userTypes';
 
 function showFeedback(message: string) {
     if (Platform.OS === 'android') {
@@ -248,7 +247,7 @@ export function useBiddingWebSocket({
                 })
             );
         } catch (err) {
-            console.warn(`[useBiddingWebSocket] Profile fetch failed for worker ${bid.user_id}:`, err);
+            logger.warn(`[useBiddingWebSocket] Profile fetch failed for worker ${bid.user_id}:`, err);
             if (isMountedRef.current) {
                 setBids((prev) =>
                     prev.map((b) => (String(b.id) === String(bid.id) ? { ...b, is_profile_loading: false } : b))
@@ -261,7 +260,7 @@ export function useBiddingWebSocket({
         clearWatchdogTimer();
         clearRetryTimer();
         if (wsRef.current) {
-            wsRef.current.onclose = null; // Prevent reconnect on manual close
+            wsRef.current.onclose = null;
             wsRef.current.onerror = null;
             wsRef.current.onmessage = null;
             try {
@@ -276,18 +275,17 @@ export function useBiddingWebSocket({
 
     const connect = useCallback(() => {
         if (!isMountedRef.current || !taskId || !userId || !shouldConnectRef.current) return;
-        if (wsRef.current) return; // Already connected or connecting
+        if (wsRef.current) return;
 
         const url = `${WS_BASE}/ws/bidding/${taskId}/`;
-        console.log('[useBiddingWebSocket] Connecting to:', url);
+        logger.log('[useBiddingWebSocket] Connecting to:', url);
         setWsStatus('connecting');
 
         clearWatchdogTimer();
-        // 2-second connection watchdog: if connection isn't OPEN within 2s, force reconnect
         watchdogTimerRef.current = setTimeout(() => {
             if (!isMountedRef.current || !shouldConnectRef.current) return;
             if (wsRef.current && wsRef.current.readyState !== WebSocket.OPEN) {
-                console.warn(`[useBiddingWebSocket] Connection timed out after 2000ms for task ${taskId}. Re-establishing socket...`);
+                logger.warn(`[useBiddingWebSocket] Connection timed out after 2000ms for task ${taskId}. Re-establishing socket...`);
                 if (wsRef.current) {
                     wsRef.current.onclose = null;
                     wsRef.current.onerror = null;
@@ -307,7 +305,7 @@ export function useBiddingWebSocket({
             ws.onopen = () => {
                 if (!isMountedRef.current) return;
                 clearWatchdogTimer();
-                console.log(`[useBiddingWebSocket] Connected to bidding room for task ${taskId}`);
+                logger.log(`[useBiddingWebSocket] Connected to bidding room for task ${taskId}`);
                 setWsStatus('connected');
                 retryDelayRef.current = INITIAL_RETRY_DELAY_MS;
             };
@@ -316,7 +314,7 @@ export function useBiddingWebSocket({
                 if (!isMountedRef.current) return;
                 try {
                     const data: BidsWSMessage = JSON.parse(event.data);
-                    console.log('[useBiddingWebSocket] Message received:', data);
+                    logger.log('[useBiddingWebSocket] Message received:', data);
 
                     switch (data.type) {
                         case 'bidding_closed': {
@@ -367,18 +365,6 @@ export function useBiddingWebSocket({
                                 onTaskAssignedToOtherRef.current?.(Number(accepted.task_id || taskId));
                             } else if (amICustomer) {
                                 showFeedback(`You accepted a bid of Rs. ${accepted.price}`);
-
-                                // // CRITICAL Frontend Responsibility: Customer PATCHes the task with worker_id
-                                // try {
-                                //     console.log(`[useBiddingWebSocket] Customer PATCHing task ${accepted.task_id} with worker_id ${accepted.user_id}`);
-                                //     await assignTaskWorker(
-                                //         Number(accepted.task_id),
-                                //         Number(accepted.user_id)
-                                //     );
-                                //     console.log(`[useBiddingWebSocket] Successfully assigned task ${accepted.task_id} to worker ${accepted.user_id}`);
-                                // } catch (err) {
-                                //     console.error('[useBiddingWebSocket] Failed to assign worker_id on task acceptance:', err);
-                                // }
                             } else {
                                 showFeedback('This task has been assigned to another professional.');
                             }
@@ -389,38 +375,36 @@ export function useBiddingWebSocket({
 
                         case 'heartbeat':
                         case 'ping':
-                            // Keepalive heartbeat
                             break;
 
                         default:
-                            console.log('[useBiddingWebSocket] Unhandled WS message:', data);
+                            logger.log('[useBiddingWebSocket] Unhandled WS message:', data);
                             break;
                     }
                 } catch (e) {
-                    console.warn('[useBiddingWebSocket] Failed to parse message:', e);
+                    logger.warn('[useBiddingWebSocket] Failed to parse message:', e);
                 }
             };
 
             ws.onerror = (error) => {
-                console.error(`[useBiddingWebSocket] WebSocket error for task ${taskId}:`, error);
+                logger.error(`[useBiddingWebSocket] WebSocket error for task ${taskId}:`, error);
             };
 
             ws.onclose = (event) => {
                 if (!isMountedRef.current) return;
                 wsRef.current = null;
-                console.log(`[useBiddingWebSocket] Socket closed for task ${taskId}. Code: ${event.code}`);
+                logger.log(`[useBiddingWebSocket] Socket closed for task ${taskId}. Code: ${event.code}`);
 
                 if (!shouldConnectRef.current) {
                     setWsStatus('disconnected');
                     return;
                 }
 
-                // If non-intentional close (code !== 1000), schedule reconnect
                 if (event.code !== 1000) {
                     setWsStatus('reconnecting');
                     const delay = retryDelayRef.current;
                     retryDelayRef.current = Math.min(delay * 2, MAX_RETRY_DELAY_MS);
-                    console.log(`[useBiddingWebSocket] Reconnecting in ${delay}ms...`);
+                    logger.log(`[useBiddingWebSocket] Reconnecting in ${delay}ms...`);
                     retryTimerRef.current = setTimeout(() => {
                         connect();
                     }, delay);
@@ -429,15 +413,15 @@ export function useBiddingWebSocket({
                 }
             };
         } catch (err) {
-            console.error('[useBiddingWebSocket] Connection initialization failed:', err);
+            logger.error('[useBiddingWebSocket] Connection initialization failed:', err);
             setWsStatus('disconnected');
         }
-    }, [taskId, userId, closeSocket]);
+    }, [taskId, userId, closeSocket, enrichBidProfile]);
 
     const placeBid = useCallback(
         (price: number, estimatedHours: number = 1) => {
             if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-                console.warn('[useBiddingWebSocket] Cannot place bid: WebSocket is not open.');
+                logger.warn('[useBiddingWebSocket] Cannot place bid: WebSocket is not open.');
                 showFeedback('Connection error. Please wait until connected to place a bid.');
                 return;
             }
@@ -449,7 +433,7 @@ export function useBiddingWebSocket({
                 estimated_hours: estimatedHours,
             };
 
-            console.log('[useBiddingWebSocket] Sending place_bid payload:', payload);
+            logger.log('[useBiddingWebSocket] Sending place_bid payload:', payload);
             wsRef.current.send(JSON.stringify(payload));
         },
         [userId]
@@ -457,7 +441,7 @@ export function useBiddingWebSocket({
 
     const acceptBid = useCallback((bidId: number | string) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-            console.warn('[useBiddingWebSocket] Cannot accept bid: WebSocket is not open.');
+            logger.warn('[useBiddingWebSocket] Cannot accept bid: WebSocket is not open.');
             showFeedback('Connection error. Please wait until connected to accept a bid.');
             return;
         }
@@ -467,11 +451,10 @@ export function useBiddingWebSocket({
             bid_id: bidId,
         };
 
-        console.log('[useBiddingWebSocket] Sending accept_bid payload:', payload);
+        logger.log('[useBiddingWebSocket] Sending accept_bid payload:', payload);
         wsRef.current.send(JSON.stringify(payload));
     }, []);
 
-    // Effect: Handle enabled / taskId / userId changes
     useEffect(() => {
         shouldConnectRef.current = enabled && Boolean(taskId) && Boolean(userId);
 
@@ -486,7 +469,6 @@ export function useBiddingWebSocket({
         }
     }, [enabled, taskId, userId, connect, closeSocket]);
 
-    // Effect: App state transitions (foreground / background)
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
             const prev = appStateRef.current;
@@ -507,7 +489,6 @@ export function useBiddingWebSocket({
         return () => subscription.remove();
     }, [connect, closeSocket]);
 
-    // Cleanup on unmount
     useEffect(() => {
         isMountedRef.current = true;
         return () => {

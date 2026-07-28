@@ -1,8 +1,5 @@
-import { fetchWithAuth } from './fetchClient';
+import { fetchWithAuth, API_URL } from './fetchClient';
 import { AdminReviewItem } from '@/types/admin';
-
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
-const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
 
 export const getAllReviews = async (): Promise<AdminReviewItem[]> => {
   const response = await fetchWithAuth(`${API_URL}/app/review/`);

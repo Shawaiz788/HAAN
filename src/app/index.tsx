@@ -5,7 +5,6 @@ import {
   View,
   Pressable,
   StatusBar,
-  Dimensions,
   Platform,
   ActivityIndicator,
   Image
@@ -14,41 +13,24 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/auth';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { USER_TYPE_ADMIN, USER_TYPE_PRO } from '../constants/userTypes';
-const { width } = Dimensions.get('window');
+import { useRouteByUserType } from '@/hooks/useRouteByUserType';
+import { Colors } from '@/constants/colors';
 
 export default function WelcomeScreen() {
-  const { user } = useAuth(); // Updated hook
+  const { user } = useAuth();
   const router = useRouter();
+  const { routeAfterAuth } = useRouteByUserType();
   const [selectedLang, setSelectedLang] = useState<'english' | 'urdu'>('english');
 
   useEffect(() => {
     if (user) {
-      const isProfileIncomplete = !user.displayName;
-      if (isProfileIncomplete) {
-        router.replace('/profile-setup');
-      } else if (user.usertype_id === USER_TYPE_ADMIN) {
-        router.replace('/(protected)/(admin)/dashboard');
-      } else if (user.usertype_id === USER_TYPE_PRO) {
-        router.replace('/(protected)/(pro)/live-jobs');
-      } else {
-        router.replace('/(protected)/(client)/home');
-      }
+      routeAfterAuth(user);
     }
-  }, [user]);
+  }, [user, router]);
 
   const handleContinue = () => {
     if (user) {
-      const isProfileIncomplete = !user.displayName;
-      if (isProfileIncomplete) {
-        router.replace('/profile-setup');
-      } else if (user.usertype_id === USER_TYPE_ADMIN) {
-        router.replace('/(protected)/(admin)/dashboard');
-      } else if (user.usertype_id === USER_TYPE_PRO) {
-        router.replace('/(protected)/(pro)/dashboard');
-      } else {
-        router.replace('/(protected)/(client)/home');
-      }
+      routeAfterAuth(user);
     } else {
       router.push('/onboardings');
     }
@@ -56,15 +38,15 @@ export default function WelcomeScreen() {
 
   if (user) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0B5A3E' }}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.white} />
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0B5A3E" />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.brand.dark} />
 
       <View style={styles.container}>
         {/* Top/Center Branding Area */}
@@ -128,21 +110,21 @@ export default function WelcomeScreen() {
           >
             <View style={styles.primaryButtonContent}>
               <Text style={styles.primaryButtonText}>Get Started</Text>
-              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={styles.arrowIcon} />
+              <Ionicons name="arrow-forward" size={18} color={Colors.white} style={styles.arrowIcon} />
             </View>
           </Pressable>
 
           <View style={styles.trustFooter}>
             <View style={styles.trustColumn}>
-              <Ionicons name="shield-checkmark-outline" size={20} color="#0B5A3E" />
+              <Ionicons name="shield-checkmark-outline" size={20} color={Colors.brand.dark} />
               <Text style={styles.trustText}>Verified</Text>
             </View>
             <View style={styles.trustColumn}>
-              <Ionicons name="people-outline" size={20} color="#0B5A3E" />
+              <Ionicons name="people-outline" size={20} color={Colors.brand.dark} />
               <Text style={styles.trustText}>Trusted</Text>
             </View>
             <View style={styles.trustColumn}>
-              <Ionicons name="wallet-outline" size={20} color="#0B5A3E" />
+              <Ionicons name="wallet-outline" size={20} color={Colors.brand.dark} />
               <Text style={styles.trustText}>Easy Pay</Text>
             </View>
           </View>
@@ -155,11 +137,17 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0B5A3E',
+    backgroundColor: Colors.brand.dark,
   },
   container: {
     flex: 1,
     justifyContent: 'space-between',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.brand.dark,
   },
   brandWrapper: {
     flex: 1,
@@ -174,14 +162,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: Colors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 4,
-  },
-  rotatedContainer: {
-    transform: [{ rotate: '-15deg' }],
   },
   logoImage: {
     width: 90,
@@ -190,11 +175,8 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
     overflow: 'hidden'
   },
-  hammerEmoji: {
-    fontSize: 38,
-  },
   brandName: {
-    color: '#FFFFFF',
+    color: Colors.white,
     fontSize: 40,
     fontWeight: 'bold',
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
@@ -210,20 +192,20 @@ const styles = StyleSheet.create({
   },
   controlsWrapper: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.white,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
     paddingTop: 32,
     paddingBottom: Platform.OS === 'ios' ? 24 : 32,
-    shadowColor: '#000',
+    shadowColor: Colors.black,
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.08,
     shadowRadius: 10,
     elevation: 5,
   },
   langLabel: {
-    color: '#374151',
+    color: Colors.neutral[700],
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
@@ -244,31 +226,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   langButtonActive: {
-    backgroundColor: '#0B5A3E',
-    borderColor: '#0B5A3E',
+    backgroundColor: Colors.brand.dark,
+    borderColor: Colors.brand.dark,
   },
   langButtonInactive: {
-    backgroundColor: '#F3F4F6',
-    borderColor: '#E5E7EB',
+    backgroundColor: Colors.neutral[100],
+    borderColor: Colors.neutral[200],
   },
   langButtonText: {
     fontSize: 15,
     fontWeight: '700',
   },
   langButtonTextActive: {
-    color: '#FFFFFF',
+    color: Colors.white,
   },
   langButtonTextInactive: {
-    color: '#374151',
+    color: Colors.neutral[700],
   },
   primaryButton: {
-    backgroundColor: '#D97706',
+    backgroundColor: Colors.brand.amber,
     width: '100%',
     height: 52,
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#D97706',
+    shadowColor: Colors.brand.amber,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -283,7 +265,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: Colors.white,
     fontSize: 16,
     fontWeight: '700',
     marginRight: 6,
@@ -303,7 +285,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   trustText: {
-    color: '#4B5563',
+    color: Colors.neutral[600],
     fontSize: 12,
     fontWeight: '600',
     marginTop: 6,

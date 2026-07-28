@@ -5,6 +5,8 @@ import useTaskStore from '../store/taskStore';
 import { getUserTasksFromBackend } from '@/services/task';
 import { USER_TYPE_CLIENT } from '@/constants/userTypes';
 import { syncPaymentPreferences } from '@/store/paymentStore';
+import { mapBackendTaskToLocal } from '@/utils/taskMapper';
+import { logger } from '@/utils/logger';
 
 interface AuthContextType {
     user: AppUser | null;
@@ -31,7 +33,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const loadSession = async () => {
         try {
             const sessionStr = await SecureStore.getItemAsync('user_session');
-            //console.log('[SecureStore] Loaded user session string:', sessionStr);
             if (sessionStr) {
                 const sessionUser = JSON.parse(sessionStr);
                 setUser(sessionUser);
@@ -41,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setUser(null);
             }
         } catch (e) {
-            console.error('Error loading user session:', e);
+            logger.error('Error loading user session:', e);
         } finally {
             setInitializing(false);
         }
@@ -57,14 +58,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (appUser.token) {
                 await SecureStore.setItemAsync('user_token', appUser.token);
                 await SecureStore.setItemAsync('user_token_saved_at', Date.now().toString());
-                //console.log('[SecureStore] Saved user JWT access token and timestamp');
             }
             // Save the JWT refresh token separately if present
             if (appUser.refreshToken) {
                 await SecureStore.setItemAsync('user_refresh_token', appUser.refreshToken);
-                //console.log('[SecureStore] Saved user JWT refresh token');
             }
-            await SecureStore.setItemAsync('user_session', JSON.stringify(appUser, null, 4));
+            await SecureStore.setItemAsync('user_session', JSON.stringify(appUser));
 
             // Switch MMKV store user context
             useTaskStore.getState().switchUser(appUser.id ?? null);
@@ -72,23 +71,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Fetch tasks from backend strictly on explicit user login for Customer users
             if (appUser.id && appUser.usertype_id === USER_TYPE_CLIENT) {
                 try {
-                    // console.log(`[auth login] Syncing customer task history from backend for User ID: ${appUser.id}...`);
                     const backendTasks = await getUserTasksFromBackend(appUser.id);
-                    const mappedTasks: Task[] = (backendTasks || []).map((bt) => ({
-                        id: bt.id ? bt.id.toString() : Date.now().toString(),
-                        backend_id: bt.id,
-                        category: bt.subject || 'General Task',
-                        description: bt.body || '',
-                        budget: bt.price || 0,
-                        locationName: 'Specified Location',
-                        paymentPref: 'Cash',
-                        status: (bt.status_id === 4 ? 'completed' : bt.status_id === 5 ? 'cancelled' : 'searching') as any,
-                        createdAt: bt.created_at || new Date().toISOString(),
-                    }));
+                    const mappedTasks: Task[] = (backendTasks || []).map(mapBackendTaskToLocal);
                     useTaskStore.getState().setTaskHistory(mappedTasks);
-                    console.log(`[auth login] Successfully synced ${mappedTasks.length} tasks into MMKV for User ID: ${appUser.id}`);
+                    logger.log(`[auth login] Successfully synced ${mappedTasks.length} tasks into MMKV for User ID: ${appUser.id}`);
                 } catch (err) {
-                    console.warn('[auth login] On-login task history API sync failed:', err);
+                    logger.warn('[auth login] On-login task history API sync failed:', err);
                 }
             }
 
@@ -97,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             setUser(appUser);
         } catch (e) {
-            console.error('Error saving user session:', e);
+            logger.error('Error saving user session:', e);
             throw e;
         }
     };
@@ -111,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             useTaskStore.getState().switchUser(null);
             setUser(null);
         } catch (e) {
-            console.error('Error clearing user session:', e);
+            logger.error('Error clearing user session:', e);
             throw e;
         }
     };
@@ -132,11 +120,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 ...updatedFields,
             } as AppUser;
 
-            await SecureStore.setItemAsync('user_session', JSON.stringify(newSession, null, 4));
-            console.log('[SecureStore] Updated user session in SecureStore:', newSession);
+            await SecureStore.setItemAsync('user_session', JSON.stringify(newSession));
+            logger.log('[SecureStore] Updated user session in SecureStore');
             setUser(newSession);
         } catch (e) {
-            console.error('Error updating user session:', e);
+            logger.error('Error updating user session:', e);
             throw e;
         }
     };

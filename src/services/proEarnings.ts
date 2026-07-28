@@ -1,11 +1,9 @@
-import { fetchWithAuth } from './fetchClient';
+import { fetchWithAuth, API_URL } from './fetchClient';
 import { ProEarnings } from '@/types';
-
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
-const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
+import { logger } from '@/utils/logger';
 
 export const createProEarnings = async (workerId: number | string): Promise<ProEarnings> => {
-    console.log(`[proEarnings API] Creating earnings entry for worker ID: ${workerId}`);
+    logger.log(`[proEarnings API] Creating earnings entry for worker ID: ${workerId}`);
     const response = await fetchWithAuth(`${API_URL}/app/professional/earning/`, {
         method: 'POST',
         headers: {
@@ -18,8 +16,7 @@ export const createProEarnings = async (workerId: number | string): Promise<ProE
     });
 
     const responseText = await response.text();
-    console.log('[proEarnings API] Create pro earnings response status:', response.status);
-    console.log('[proEarnings API] Create pro earnings response body:', responseText);
+    logger.log('[proEarnings API] Create pro earnings response status:', response.status);
 
     if (!response.ok) {
         throw new Error(`Failed to create earnings entry. Status: ${response.status}. Response: ${responseText}`);
@@ -33,7 +30,7 @@ export const createProEarnings = async (workerId: number | string): Promise<ProE
 };
 
 export const getProEarnings = async (workerId: number | string): Promise<ProEarnings> => {
-    console.log(`[proEarnings API] Fetching earnings for worker ID: ${workerId}`);
+    logger.log(`[proEarnings API] Fetching earnings for worker ID: ${workerId}`);
     const response = await fetchWithAuth(`${API_URL}/app/professional/earning/${workerId}/`, {
         method: 'GET',
         headers: {
@@ -42,17 +39,15 @@ export const getProEarnings = async (workerId: number | string): Promise<ProEarn
     });
 
     const responseText = await response.text();
-    console.log('[proEarnings API] Get pro earnings response status:', response.status);
-    console.log('[proEarnings API] Get pro earnings response body:', responseText);
+    logger.log('[proEarnings API] Get pro earnings response status:', response.status);
 
     if (!response.ok) {
-        // Fallback: If 404 or "No WorkerEarnings matches", automatically create earnings entry for previous accounts
         if (response.status === 404 || responseText.includes('No WorkerEarnings matches')) {
-            console.log(`[proEarnings API] 404 received. Creating worker earnings record for ID ${workerId}...`);
+            logger.log(`[proEarnings API] 404 received. Creating worker earnings record for ID ${workerId}...`);
             try {
                 return await createProEarnings(workerId);
             } catch (createErr) {
-                console.error('[proEarnings API] Fallback earnings creation failed:', createErr);
+                logger.error('[proEarnings API] Fallback earnings creation failed:', createErr);
                 return {
                     id: 0,
                     worker_id: Number(workerId),

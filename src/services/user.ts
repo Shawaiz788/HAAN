@@ -1,11 +1,37 @@
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
-const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
-import { fetchWithTimeout, fetchWithAuth } from './fetchClient';
-import * as SecureStore from 'expo-secure-store';
-import { User, UserType, UserLocation } from '@/types';
+import { fetchWithTimeout, fetchWithAuth, API_URL } from './fetchClient';
+import { User, UserLocation } from '@/types';
+import { logger } from '@/utils/logger';
 
-export const createUser = async (user: Omit<User, 'id'>): Promise<User> => {
-    console.log('[createUser API] Sending payload:', JSON.stringify(user, null, 2));
+export interface LoginResponse {
+    id: number;
+    first_name: string;
+    last_name: string;
+    phone_number?: string;
+    email: string;
+    gender: string;
+    usertype_id: number;
+    location_id?: number;
+    overall_rating?: number;
+    profile_pic?: string;
+    image?: string;
+    access?: string;
+    access_token?: string;
+    token?: string;
+    refresh?: string;
+    refresh_token?: string;
+    user?: User;
+}
+
+export interface CreateUserResponse extends User {
+    access?: string;
+    access_token?: string;
+    token?: string;
+    refresh?: string;
+    refresh_token?: string;
+}
+
+export const createUser = async (user: Omit<User, 'id'>): Promise<CreateUserResponse> => {
+    logger.log('[createUser API] Sending payload:', JSON.stringify(user, null, 2));
     const response = await fetchWithTimeout(`${API_URL}/app/register/`, {
         method: 'POST',
         headers: {
@@ -15,8 +41,7 @@ export const createUser = async (user: Omit<User, 'id'>): Promise<User> => {
     });
 
     const responseText = await response.text();
-    console.log('[createUser API] Response Status:', response.status);
-    console.log('[createUser API] Response Body:', responseText);
+    logger.log('[createUser API] Response Status:', response.status);
 
     if (!response.ok) {
         if (response.status === 400) {
@@ -53,11 +78,9 @@ export const createUser = async (user: Omit<User, 'id'>): Promise<User> => {
     }
 };
 
-
-
-export const loginUser = async (phone_number: string, password: string): Promise<User> => {
+export const loginUser = async (phone_number: string, password: string): Promise<LoginResponse> => {
     const url = `${API_URL}/app/login/`;
-    console.log('[loginUser API] Logging in via URL:', url);
+    logger.log('[loginUser API] Logging in via URL:', url);
     const response = await fetchWithTimeout(url, {
         method: 'POST',
         headers: {
@@ -66,8 +89,7 @@ export const loginUser = async (phone_number: string, password: string): Promise
         body: JSON.stringify({ phone_number, password }),
     });
     const responseText = await response.text();
-    console.log('[loginUser API] Response Status:', response.status);
-    console.log('[loginUser API] Response Body:', responseText);
+    logger.log('[loginUser API] Response Status:', response.status);
 
     if (!response.ok) {
         if (response.status === 400 || response.status === 401 || response.status === 403) {
@@ -89,10 +111,15 @@ export const loginUser = async (phone_number: string, password: string): Promise
     }
 };
 
-// Verify user account on backend using their user ID and optional JWT access token
-export const verifyUserOnBackend = async (userId: number): Promise<any> => {
+export interface VerifyUserResponse {
+    message?: string;
+    is_verified?: boolean;
+}
+
+// Verify user account on backend using their user ID
+export const verifyUserOnBackend = async (userId: number): Promise<VerifyUserResponse> => {
     const url = `${API_URL}/app/user/${userId}/verify/`;
-    console.log('[verifyUserOnBackend] Verifying account via URL:', url);
+    logger.log('[verifyUserOnBackend] Verifying account via URL:', url);
     const response = await fetchWithAuth(url, {
         method: 'PATCH',
         headers: {
@@ -102,8 +129,7 @@ export const verifyUserOnBackend = async (userId: number): Promise<any> => {
     });
 
     const responseText = await response.text();
-    console.log('[verifyUserOnBackend] Response Status:', response.status);
-    console.log('[verifyUserOnBackend] Response Body:', responseText);
+    logger.log('[verifyUserOnBackend] Response Status:', response.status);
 
     if (!response.ok) {
         if (response.status === 404) {
@@ -122,10 +148,17 @@ export const verifyUserOnBackend = async (userId: number): Promise<any> => {
     }
 };
 
-// Check if a phone number is already registered in the system (returns true if exists, false otherwise)
+/**
+ * Checks if a phone number is already registered in the system.
+ *
+ * TODO: This currently abuses the POST /app/register/ endpoint by sending partial
+ * data and parsing validation errors. Ask the backend team to create a dedicated
+ * GET /app/user/exists/?phone=... endpoint instead, as this approach is fragile
+ * and may trigger rate limiting or create incomplete records.
+ */
 export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> => {
     const url = `${API_URL}/app/register/`;
-    console.log('[checkPhoneExists] Checking phone existence via URL:', url);
+    logger.log('[checkPhoneExists] Checking phone existence via URL:', url);
     try {
         const response = await fetchWithTimeout(url, {
             method: 'POST',
@@ -136,8 +169,7 @@ export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> =>
         });
 
         const responseText = await response.text();
-        console.log('[checkPhoneExists] Response Status:', response.status);
-        console.log('[checkPhoneExists] Response Body:', responseText);
+        logger.log('[checkPhoneExists] Response Status:', response.status);
 
         if (response.status === 400) {
             try {
@@ -149,14 +181,12 @@ export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> =>
                         err.toLowerCase().includes('unique')
                     );
                     if (hasExistsError) {
-                        return true; // Phone number already registered!
+                        return true;
                     }
                 }
-                // If it is status 400 but phone_number is not flagged as existing,
-                // the number is available (other fields are just missing).
                 return false;
             } catch (e) {
-                console.error('[checkPhoneExists] Failed to parse JSON error response:', e);
+                logger.error('[checkPhoneExists] Failed to parse JSON error response:', e);
             }
         }
         if (!response.ok) {
@@ -170,7 +200,7 @@ export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> =>
         }
         return false;
     } catch (error: any) {
-        console.error('[checkPhoneExists] Connection error during check:', error);
+        logger.error('[checkPhoneExists] Connection error during check:', error);
         throw error;
     }
 };
@@ -179,8 +209,6 @@ export const updateUserOnBackend = async (
     userId: number,
     userDetails: Partial<User>
 ): Promise<User> => {
-    //console.log(`[user API] Updating user details on backend for User ID: ${userId}`, userDetails);
-
     const response = await fetchWithAuth(`${API_URL}/app/update/user/`, {
         method: 'PATCH',
         headers: {
@@ -189,7 +217,6 @@ export const updateUserOnBackend = async (
         body: JSON.stringify(userDetails),
     });
     const responseText = await response.text();
-    // console.log('[user API] Update user response status:', response.status);
 
     if (!response.ok) {
         throw new Error(`Failed to update profile on backend. Status: ${response.status}. Response: ${responseText}`);
@@ -205,7 +232,6 @@ export const updateUserOnBackend = async (
 export const updateProfilePic = async (
     uri: string
 ): Promise<User> => {
-    //console.log(`[user API] Uploading profile picture from uri: ${uri}`);
     const formData = new FormData();
     const filename = uri.split('/').pop() || 'profile.jpg';
     const match = /\.(\w+)$/.exec(filename);
@@ -226,35 +252,40 @@ export const updateProfilePic = async (
     });
 
     const responseText = await response.text();
-    // console.log('[user API] Update profile pic response status:', response.status);
-    // console.log('[user API] Update profile pic response body:', responseText);
 
     if (!response.ok) {
         throw new Error(`Failed to update profile picture on backend. Status: ${response.status}. Response: ${responseText}`);
     }
 
     try {
-        const parsed = JSON.parse(responseText);
-        //console.log('[user API] Parsed profile pic response:', JSON.stringify(parsed));
-        return parsed;
+        return JSON.parse(responseText);
     } catch (e) {
         throw new Error(`Failed to parse profile picture update response. Content: ${responseText}`);
     }
 };
 
-const customerReviewsCache = new Map<number, { data: any[]; timestamp: number }>();
+export interface UserReview {
+    id: number;
+    user_id: number;
+    task_id: number;
+    given_by: number;
+    body: string;
+    rating: number;
+    attachment_id?: number | null;
+    created_at?: string;
+}
+
+const customerReviewsCache = new Map<number, { data: UserReview[]; timestamp: number }>();
 const REVIEWS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 
-export const getUserReviews = async (userId: number, forceRefresh = false): Promise<any[]> => {
+export const getUserReviews = async (userId: number, forceRefresh = false): Promise<UserReview[]> => {
     const cached = customerReviewsCache.get(userId);
     if (!forceRefresh && cached && (Date.now() - cached.timestamp < REVIEWS_CACHE_TTL)) {
         return cached.data;
     }
 
-    //console.log(`[user API] Fetching reviews list from /app/review/ for user ID: ${userId}`);
     const response = await fetchWithAuth(`${API_URL}/app/review/`);
     const responseText = await response.text();
-    //console.log('[user API] Get reviews status:', response.status);
 
     if (!response.ok) {
         if (response.status === 404) return [];
@@ -263,9 +294,8 @@ export const getUserReviews = async (userId: number, forceRefresh = false): Prom
 
     try {
         const data = JSON.parse(responseText);
-        const allReviews: any[] = Array.isArray(data) ? data : (data.results || data.reviews || []);
-        // Filter reviews for target user
-        const userReviews = allReviews.filter((r: any) => Number(r.user_id) === Number(userId));
+        const allReviews: UserReview[] = Array.isArray(data) ? data : (data.results || data.reviews || []);
+        const userReviews = allReviews.filter((r) => Number(r.user_id) === Number(userId));
         customerReviewsCache.set(userId, { data: userReviews, timestamp: Date.now() });
         return userReviews;
     } catch (e) {
