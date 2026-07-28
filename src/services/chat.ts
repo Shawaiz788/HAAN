@@ -39,7 +39,7 @@ export const checkChatStatus = async (
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetchWithAuth(`${API_URL}/messages/room/${taskId}/status/`, {
+  const response = await fetchWithAuth(`${API_URL}/app/message/room/${taskId}/status/`, {
     method: 'GET',
     headers,
   });
