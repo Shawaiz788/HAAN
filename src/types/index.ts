@@ -8,12 +8,19 @@ export interface City {
   id: number;
   name: string;
   country?: number;
+  boundary_polygon?: Array<[number, number]> | string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Area {
   id: number;
   name: string;
   city?: number;
+  city_id?: number;
+  boundary_polygon?: Array<[number, number]> | string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface UserLocation {
