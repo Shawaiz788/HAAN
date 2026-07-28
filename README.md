@@ -589,7 +589,6 @@ npm install
 Create a `.env` file in the root directory (see `.env.example`):
 ```env
 EXPO_PUBLIC_API_URL=https://your-api-domain.com/
-EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
 ```
 
 ### 3. Firebase Configuration
