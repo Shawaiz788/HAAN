@@ -292,7 +292,9 @@ export function useBiddingWebSocket({
                     switch (data.type) {
                         case 'bidding_closed': {
                             setIsBiddingClosed(true);
-                            showFeedback('This task has already been assigned.');
+                            if (!isCustomerRef.current) {
+                                showFeedback('This task has already been assigned.');
+                            }
                             closeSocket();
                             break;
                         }
@@ -336,10 +338,6 @@ export function useBiddingWebSocket({
                             } else if (!amICustomer) {
                                 showFeedback('This task has been assigned to another professional.');
                                 onTaskAssignedToOtherRef.current?.(Number(accepted.task_id || taskId));
-                            } else if (amICustomer) {
-                                showFeedback(`You accepted a bid of Rs. ${accepted.price}`);
-                            } else {
-                                showFeedback('This task has been assigned to another professional.');
                             }
 
                             closeSocket();

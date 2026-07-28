@@ -106,6 +106,27 @@ export function useHomeViewTaskPost({
     return () => { isMounted = false; };
   }, []);
 
+  // Automatically pre-select the 1st subcategory whenever activeCategory updates
+  useEffect(() => {
+    if (!activeCategory || categories.length === 0) return;
+    const selectedCategoryObj = categories.find(
+      (c) => c.name.toLowerCase() === activeCategory.toLowerCase()
+    );
+    if (selectedCategoryObj && selectedCategoryObj.id) {
+      const currentSubs = getSubcategoriesByCategory(selectedCategoryObj.id || selectedCategoryObj.name);
+      if (currentSubs && currentSubs.length > 0) {
+        const firstSub = currentSubs[0];
+        setActiveSubcategory(firstSub.name);
+        const bp = Number(firstSub.base_price ?? firstSub.basePrice ?? 0);
+        if (bp > 0) {
+          setBudget(bp.toString());
+        }
+      } else {
+        setActiveSubcategory('');
+      }
+    }
+  }, [activeCategory, categories, getSubcategoriesByCategory]);
+
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsConnected(!!state.isConnected && state.isInternetReachable !== false);

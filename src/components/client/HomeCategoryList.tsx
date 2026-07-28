@@ -83,10 +83,6 @@ export default function HomeCategoryList({
   const handleMainCategoryPress = (catName: string) => {
     if (activeCategory !== catName) {
       setActiveCategory(catName);
-      // Reset subcategory selection when switching main categories
-      if (setActiveSubcategory) {
-        setActiveSubcategory('');
-      }
     }
   };
 

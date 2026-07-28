@@ -226,8 +226,9 @@ export const styles = StyleSheet.create({
   },
   subCategoryContainer: {
     marginTop: 8,
-    marginBottom: 4,
-    gap: 4,
+    marginBottom: 6,
+    gap: 6,
+    overflow: 'visible',
   },
   subCategoryLabel: {
     fontSize: 10,
@@ -239,8 +240,9 @@ export const styles = StyleSheet.create({
   subCategoryScroll: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
+    gap: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   subChip: {
     flexDirection: 'row',
@@ -249,14 +251,15 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 20,
-    paddingHorizontal: 13,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
   },
   subChipActive: {
     backgroundColor: '#ECFDF5',
     borderColor: '#10B981',
     borderWidth: 2,
-    transform: [{ scale: 1.05 }],
+    paddingHorizontal: 13,
+    paddingVertical: 6,
   },
   subChipText: {
     fontSize: 12,
