@@ -196,6 +196,8 @@ function SearchingState({ hasNoJobs }: { hasNoJobs: boolean }) {
 // ─── Main View ────────────────────────────────────────────────────────────────
 
 import useProTaskStore from '@/store/proTaskStore';
+import useProOnlineStore from '@/store/proOnlineStore';
+import { registerForPushNotificationsAsync } from '@/services/notificationService';
 
 export default function ProLiveJobsView() {
     const insets = useSafeAreaInsets();
@@ -203,7 +205,14 @@ export default function ProLiveJobsView() {
     const { user, logout } = useAuth();
 
     const [drawerOpen, setDrawerOpen] = useState(false);
-    const [isOnline, setIsOnline] = useState(false);
+    const { isOnline, setIsOnline, toggleOnline } = useProOnlineStore();
+
+    // Register push notification channel and permissions when online
+    useEffect(() => {
+        if (isOnline) {
+            registerForPushNotificationsAsync();
+        }
+    }, [isOnline]);
     const { earnings, fetchEarnings } = useProEarningsStore();
     const [selectedJob, setSelectedJob] = useState<LiveJob | null>(null);
     const [sheetVisible, setSheetVisible] = useState(false);
@@ -603,7 +612,7 @@ export default function ProLiveJobsView() {
                 onClose={() => setDrawerOpen(false)}
                 activeRoute="live-jobs"
                 isOnline={isOnline}
-                onToggleOnline={() => setIsOnline((v) => !v)}
+                onToggleOnline={toggleOnline}
             />
             {/* Active Bids Socket Listeners (for quick bids feedback) */}
             {activeJobIds.map((id) => (

@@ -18,6 +18,7 @@ import ProDrawerPanel from '@/components/pro/ProDrawerPanel';
 import { getProEarnings } from '@/services/proEarnings';
 import { getWorkerTasksFromBackend } from '@/services/task';
 import useProEarningsStore from '@/store/proEarningsStore';
+import useProOnlineStore from '@/store/proOnlineStore';
 import { ProEarnings } from '@/types';
 import styles from '@/styles/proDashboardView.styles';
 
@@ -114,9 +115,8 @@ export default function ProDashboardView() {
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const { user } = useAuth();
-
     const [drawerOpen, setDrawerOpen] = useState(false);
-    const [isOnline, setIsOnline] = useState(false);
+    const { isOnline, setIsOnline, toggleOnline } = useProOnlineStore();
     const { earnings, fetchEarnings, lastFetchedAt } = useProEarningsStore();
     const [loadingEarnings, setLoadingEarnings] = useState(true);
     const [recentJobs, setRecentJobs] = useState<any[]>([]);
@@ -346,7 +346,7 @@ export default function ProDashboardView() {
                 onClose={() => setDrawerOpen(false)}
                 activeRoute="dashboard"
                 isOnline={isOnline}
-                onToggleOnline={() => setIsOnline((v) => !v)}
+                onToggleOnline={toggleOnline}
             />
         </View>
     );
