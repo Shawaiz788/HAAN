@@ -1,15 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  StyleSheet,
   Text,
   View,
   ScrollView,
   Pressable,
-  Image,
-  TextInput,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
   Animated,
   Easing,
   Alert,
@@ -17,6 +11,7 @@ import {
   ActivityIndicator,
   Linking,
   ToastAndroid,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +28,9 @@ import UserReviewsModal from '@/components/UserReviewsModal';
 import { getUserReviews } from '@/services/user';
 import { ClientChatModal } from '@/components/client/ClientChatModal';
 import { CancelProgressModal } from '@/components/client/CancelProgressModal';
+import { TaskSummaryCard } from '@/components/client/TaskSummaryCard';
+import { ClientBidsList } from '@/components/client/ClientBidsList';
+import { AcceptedProCard } from '@/components/client/AcceptedProCard';
 
 const { width } = Dimensions.get('window');
 
@@ -133,8 +131,6 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
   useEffect(() => {
     if (!taskId || !activeTask || activeTask.status === 'completed' || activeTask.status === 'cancelled') return;
 
-    console.log(`[ActiveTaskScreen] Starting task status check for Task ID: ${taskId}...`);
-
     let isMounted = true;
     const checkTaskStatus = async () => {
       try {
@@ -142,7 +138,6 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
         if (!isMounted) return;
 
         if (!taskData) {
-          console.log(`[ActiveTaskScreen] Task ${taskId} no longer exists on backend (deleted from another device).`);
           Alert.alert(
             'Task Removed',
             'This task request has been deleted or removed from the system.',
@@ -152,8 +147,6 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
         }
 
         if (taskData.status_id === 4 || (taskData as any).status === 'completed') {
-          console.log(`[ActiveTaskScreen] Detected task ${taskId} completed on backend!`);
-
           const proName = activeTask.acceptedBid?.name || 'Service Provider';
           const proId = (activeTask.acceptedBid as any)?.user_id || 1;
           const taskTitle = activeTask.category || 'Service Request';
@@ -161,7 +154,6 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
           setCompletedTaskInfo({ id: taskId, proName, proId, title: taskTitle });
           setReviewModalVisible(true);
         } else if (taskData.status_id === 5 || taskData.status_id === 3) {
-          console.log(`[ActiveTaskScreen] Detected task ${taskId} cancelled on backend!`);
           Alert.alert(
             'Task Cancelled',
             'This task request was cancelled.',
@@ -173,7 +165,6 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
       }
     };
 
-    // Run check immediately on mount and then every 30s
     checkTaskStatus();
     const interval = setInterval(checkTaskStatus, 30000);
 
@@ -268,10 +259,7 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
       Alert.alert('Phone Number Unavailable', 'The service provider has not added a contact phone number yet.');
       return;
     }
-    const telUrl = `tel:${cleanPhone}`;
-
-    console.log('[ActiveTaskScreen] Opening Tel URL:', telUrl);
-    Linking.openURL(telUrl).catch(() => {
+    Linking.openURL(`tel:${cleanPhone}`).catch(() => {
       Alert.alert('Phone Call Error', 'Could not open phone dialer.');
     });
   };
@@ -292,14 +280,8 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
       return;
     }
     const textMessage = `Hi ${bid?.name || 'there'}, I am contacting you regarding task "${activeTask?.category}".`;
-    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMessage)}`;
-
-    console.log('[ActiveTaskScreen] Opening WhatsApp URL:', whatsappUrl);
-    Linking.openURL(whatsappUrl).catch(() => {
-      Alert.alert(
-        'WhatsApp Error',
-        'Could not open WhatsApp. Please ensure WhatsApp is installed on your device.'
-      );
+    Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMessage)}`).catch(() => {
+      Alert.alert('WhatsApp Error', 'Could not open WhatsApp. Please ensure WhatsApp is installed on your device.');
     });
   };
 
@@ -334,16 +316,6 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
     setChatInput('');
   };
 
-  const chatHeaderStyle = [
-    styles.modalHeader,
-    { paddingTop: insets.top > 0 ? insets.top + 5 : 15 }
-  ];
-
-  const chatInputStyle = [
-    styles.inputBar,
-    { paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 10 }
-  ];
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.container}>
@@ -358,23 +330,7 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {/* Task Summary Card */}
-          <View style={styles.taskSummaryCard}>
-            <View style={styles.summaryHeader}>
-              <View style={[styles.statusIndicator, activeTask.status === 'accepted' ? styles.statusActive : styles.statusSearching]} />
-              <Text style={styles.summaryCategory}>{activeTask.category}</Text>
-            </View>
-            <Text style={styles.summaryDetails} numberOfLines={2}>{activeTask.description}</Text>
-            <View style={styles.summaryMetaRow}>
-              <View style={styles.metaItem}>
-                <Ionicons name="wallet-outline" size={14} color="#6B7280" />
-                <Text style={styles.metaText}>Budget: Rs. {activeTask.budget}</Text>
-              </View>
-              <View style={styles.metaItem}>
-                <Ionicons name="location-outline" size={14} color="#6B7280" />
-                <Text style={styles.metaText} numberOfLines={1}>Address: {activeTask.locationName}</Text>
-              </View>
-            </View>
-          </View>
+          <TaskSummaryCard task={activeTask} />
 
           {/* Status Area */}
           {(activeTask.status === 'searching' || activeTask.status === 'bidding') && (
@@ -407,177 +363,31 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
 
           {/* Bids List */}
           {activeTask.status !== 'accepted' && (activeTask.status === 'bidding' || bids.length > 0) && (
-            <View style={styles.bidsSection}>
-              <Text style={styles.sectionTitle}>Offers ({bids.length})</Text>
-              {bids.length === 0 ? (
-                <View style={styles.noOffersContainer}>
-                  <Ionicons name="chatbox-ellipses-outline" size={24} color="#9CA3AF" style={{ marginBottom: 4 }} />
-                  <Text style={styles.noOffersText}>No offers received yet</Text>
-                  <Text style={styles.noOffersSubText}>
-                    Offers from nearby service providers will appear here in real time.
-                  </Text>
-                </View>
-              ) : (
-                bids.map((bid) => {
-                  if (bid.is_profile_loading) {
-                    return (
-                      <View key={bid.id} style={styles.bidCard}>
-                        <View style={styles.bidHeader}>
-                          <View style={[styles.bidAvatar, styles.skeletonBox]} />
-                          <View style={styles.bidHeaderInfo}>
-                            <View style={[styles.skeletonLine, { width: 130, height: 16, marginBottom: 8 }]} />
-                            <View style={[styles.skeletonLine, { width: 90, height: 12 }]} />
-                          </View>
-                          <View style={styles.bidPriceContainer}>
-                            <Text style={styles.bidPrice}>Rs. {bid.price}</Text>
-                            <Text style={styles.bidTime}>{bid.timeEstimate} away</Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.bidActions}>
-                          <Pressable
-                            style={[styles.bidBtn, styles.declineBtn]}
-                            onPress={() => handleDeclineBid(bid.id)}
-                          >
-                            <Text style={styles.declineBtnText}>Decline</Text>
-                          </Pressable>
-                          <Pressable
-                            style={[styles.bidBtn, styles.acceptBtn]}
-                            onPress={() => handleAcceptBid(bid)}
-                          >
-                            <Text style={styles.acceptBtnText}>Accept Offer</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    );
-                  }
-
-                  return (
-                    <View key={bid.id} style={styles.bidCard}>
-                      <View style={styles.bidHeader}>
-                        <Pressable
-                          style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
-                          onPress={() => {
-                            if (bid.user_id) {
-                              setSelectedProInfo({ id: bid.user_id, name: bid.name });
-                              setProReviewsVisible(true);
-                            }
-                          }}
-                        >
-                          <Image source={{ uri: bid.avatar }} style={styles.bidAvatar} />
-                          <View style={styles.bidHeaderInfo}>
-                            <Text style={styles.bidName}>{bid.name}</Text>
-                            <View style={styles.ratingRow}>
-                              <Ionicons name="star" size={14} color="#F59E0B" />
-                              <Text style={styles.ratingText}>
-                                {bid.rating} ({bid.reviewsCount} reviews)
-                              </Text>
-                            </View>
-                          </View>
-                        </Pressable>
-                        <View style={styles.bidPriceContainer}>
-                          <Text style={styles.bidPrice}>Rs. {bid.price}</Text>
-                          <Text style={styles.bidTime}>{bid.timeEstimate} away</Text>
-                        </View>
-                      </View>
-
-                      <Text style={styles.bidComment}>"{bid.message}"</Text>
-
-                      <View style={styles.bidActions}>
-                        <Pressable
-                          style={[styles.bidBtn, styles.declineBtn]}
-                          onPress={() => handleDeclineBid(bid.id)}
-                        >
-                          <Text style={styles.declineBtnText}>Decline</Text>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.bidBtn, styles.acceptBtn]}
-                          onPress={() => handleAcceptBid(bid)}
-                        >
-                          <Text style={styles.acceptBtnText}>Accept Offer</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  );
-                })
-              )}
-            </View>
+            <ClientBidsList
+              bids={bids}
+              onAcceptBid={handleAcceptBid}
+              onDeclineBid={handleDeclineBid}
+              onSelectPro={(proId, name) => {
+                setSelectedProInfo({ id: proId, name });
+                setProReviewsVisible(true);
+              }}
+            />
           )}
 
           {/* Accepted Professional Card */}
-          {activeTask.status === 'accepted' && activeTask.acceptedBid && (() => {
-            const acceptedBid = activeTask.acceptedBid;
-            return (
-              <View style={styles.acceptedSection}>
-                <View style={styles.alertSuccess}>
-                  <Ionicons name="checkmark-circle" size={24} color="#047857" style={{ marginRight: 8 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.alertSuccessTitle}>Professional Assigned!</Text>
-                    <Text style={styles.alertSuccessText}>
-                      {acceptedBid.is_profile_loading ? 'Service Provider' : acceptedBid.name.split(' ')[0]} is arriving in ~{acceptedBid.timeEstimate}.
-                    </Text>
-                  </View>
-                </View>
-
-                {acceptedBid.is_profile_loading ? (
-                  <View style={styles.proProfileCard}>
-                    <View style={[styles.proLargeAvatar, styles.skeletonBox]} />
-                    <View style={[styles.skeletonLine, { width: 140, height: 20, marginBottom: 8 }]} />
-                    <View style={[styles.skeletonLine, { width: 100, height: 14, marginBottom: 16 }]} />
-                  </View>
-                ) : (
-                  <View style={styles.proProfileCard}>
-                    <Pressable
-                      style={{ alignItems: 'center', width: '100%', marginBottom: 16 }}
-                      onPress={() => {
-                        const proId = (acceptedBid as any)?.user_id;
-                        if (proId) {
-                          setSelectedProInfo({ id: proId, name: acceptedBid.name });
-                          setProReviewsVisible(true);
-                        }
-                      }}
-                    >
-                      <Image source={{ uri: acceptedBid.avatar }} style={styles.proLargeAvatar} />
-                      <Text style={styles.proLargeName}>{acceptedBid.name}</Text>
-                      <View style={styles.proLargeRating}>
-                        <Ionicons name="star" size={18} color="#F59E0B" style={{ marginRight: 4 }} />
-                        <Text style={styles.proLargeRatingText}>
-                          {acceptedBid.rating} ({acceptedBid.reviewsCount} reviews)
-                        </Text>
-                      </View>
-                      <Text style={styles.tapToViewReviewsHint}>Tap profile to see reviews</Text>
-                    </Pressable>
-
-                    <View style={styles.proContactRow}>
-                      <Pressable
-                        style={[styles.contactCircleBtn, styles.contactPhone]}
-                        onPress={() => handleCall(acceptedBid)}
-                      >
-                        <Ionicons name="call" size={20} color="#FFFFFF" />
-                      </Pressable>
-
-                      <Pressable
-                        style={[styles.contactCircleBtn, styles.contactWhatsApp]}
-                        onPress={() => handleWhatsApp(acceptedBid)}
-                      >
-                        <Ionicons name="logo-whatsapp" size={20} color="#FFFFFF" />
-                      </Pressable>
-
-                      <Pressable
-                        style={[styles.contactCircleBtn, styles.contactChat]}
-                        onPress={() => setChatVisible(true)}
-                      >
-                        <Ionicons name="chatbubble" size={20} color="#FFFFFF" />
-                        {activeChatMessages.length > 0 && (
-                          <View style={styles.chatBadge} />
-                        )}
-                      </Pressable>
-                    </View>
-                  </View>
-                )}
-              </View>
-            );
-          })()}
+          {activeTask.status === 'accepted' && activeTask.acceptedBid && (
+            <AcceptedProCard
+              acceptedBid={activeTask.acceptedBid}
+              activeChatMessagesCount={activeChatMessages.length}
+              onCall={() => handleCall(activeTask.acceptedBid!)}
+              onWhatsApp={() => handleWhatsApp(activeTask.acceptedBid!)}
+              onOpenChat={() => setChatVisible(true)}
+              onSelectPro={(proId, name) => {
+                setSelectedProInfo({ id: proId, name });
+                setProReviewsVisible(true);
+              }}
+            />
+          )}
         </ScrollView>
 
         {/* Cancel Button */}
@@ -636,5 +446,3 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
     </SafeAreaView>
   );
 }
-
-
