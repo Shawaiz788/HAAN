@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { logger } from '@/utils/logger';
 import {
@@ -48,8 +47,13 @@ export function useTaskChatWebSocket({
   const [isLoadingOlder, setIsLoadingOlder] = useState<boolean>(false);
 
   const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<any>(null);
   const isComponentMounted = useRef<boolean>(true);
+  const hasCheckedStatusRef = useRef<boolean>(false);
+
+  // Reset status check flag when taskId or enabled state changes
+  useEffect(() => {
+    hasCheckedStatusRef.current = false;
+  }, [taskId, enabled]);
 
   // Helper to deduplicate messages by ID or sequence
   const appendDeduplicated = (existing: ChatMessageItem[], incoming: ChatMessageItem[] | ChatMessageItem) => {
@@ -72,21 +76,25 @@ export function useTaskChatWebSocket({
     setChatError(null);
     setIsConnecting(true);
 
-    // Step 2: Check if chat is open (pre-flight check)
-    try {
-      const statusRes = await checkChatStatus(taskId, token);
-      if (!statusRes.is_open) {
-        setIsOpen(false);
-        setChatError(statusRes.message || 'Chat is not available for this task.');
-        setIsConnecting(false);
-        return;
+    // Step 2: Check if chat is open (pre-flight check) - ONLY ONCE per taskId session
+    if (!hasCheckedStatusRef.current) {
+      try {
+        const statusRes = await checkChatStatus(taskId, token);
+        hasCheckedStatusRef.current = true;
+        if (!statusRes.is_open) {
+          setIsOpen(false);
+          setChatError(statusRes.message || 'Chat is not available for this task.');
+          setIsConnecting(false);
+          return;
+        }
+        setIsOpen(true);
+      } catch (err: any) {
+        logger.warn('[useTaskChatWS] Pre-flight check warning:', err?.message);
+        hasCheckedStatusRef.current = true;
       }
-      setIsOpen(true);
-    } catch (err: any) {
-      logger.warn('[useTaskChatWS] Pre-flight check warning:', err?.message);
     }
 
-    // Step 3: Open the WebSocket connection
+    // Step 3: Open the WebSocket connection directly
     try {
       const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
       const wsUrl = `${WS_BASE}/ws/chat/${taskId}/${tokenParam}`;
@@ -181,9 +189,6 @@ export function useTaskChatWebSocket({
     if (enabled && isFocused && taskId) {
       connect();
     } else {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
       if (socketRef.current) {
         logger.log('[useTaskChatWS] Closing chat socket as screen is unfocused or disabled');
         socketRef.current.onclose = null;
@@ -197,9 +202,6 @@ export function useTaskChatWebSocket({
 
     return () => {
       isComponentMounted.current = false;
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
       if (socketRef.current) {
         logger.log('[useTaskChatWS] Closing socket on cleanup');
         socketRef.current.onclose = null;
@@ -261,6 +263,11 @@ export function useTaskChatWebSocket({
     }
   }, [isLoadingOlder, hasMoreOlderMessages, taskId, messages, token]);
 
+  const forceReconnect = useCallback(() => {
+    hasCheckedStatusRef.current = false;
+    connect();
+  }, [connect]);
+
   return {
     messages,
     isOpen,
@@ -270,6 +277,6 @@ export function useTaskChatWebSocket({
     isLoadingOlder,
     sendMessage,
     loadOlderMessages,
-    reconnect: connect,
+    reconnect: forceReconnect,
   };
 }

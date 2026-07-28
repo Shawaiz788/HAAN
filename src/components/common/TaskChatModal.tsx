@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Modal,
-  KeyboardAvoidingView,
   Platform,
   View,
   Pressable,
@@ -12,6 +11,8 @@ import {
   ActivityIndicator,
   StyleSheet,
   StatusBar,
+  Keyboard,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,6 +43,7 @@ export function TaskChatModal({
   const { user } = useAuth();
   const [inputText, setInputText] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
+  const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
 
   const {
     messages,
@@ -59,6 +61,36 @@ export function TaskChatModal({
     token: user?.token,
     enabled: visible && Boolean(taskId),
   });
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        const h = e?.endCoordinates?.height || 0;
+        Animated.timing(keyboardHeightAnim, {
+          toValue: h,
+          duration: Platform.OS === 'ios' ? e.duration || 250 : 150,
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      (e) => {
+        Animated.timing(keyboardHeightAnim, {
+          toValue: 0,
+          duration: Platform.OS === 'ios' ? e?.duration || 250 : 150,
+          useNativeDriver: false,
+        }).start();
+      }
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardHeightAnim]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -87,9 +119,16 @@ export function TaskChatModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <StatusBar barStyle="light-content" backgroundColor={headerBg} />
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            paddingBottom: keyboardHeightAnim.interpolate({
+              inputRange: [0, 1000],
+              outputRange: [Math.max(insets.bottom, 12), 1000 + Math.max(insets.bottom, 12)],
+            }),
+          },
+        ]}
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'ios' ? 8 : 12), backgroundColor: headerBg }]}>
@@ -201,7 +240,7 @@ export function TaskChatModal({
         </ScrollView>
 
         {/* Input Bar */}
-        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <View style={styles.inputContainer}>
           <TextInput
             style={styles.inputField}
             placeholder={isOpen ? "Type a message..." : "Chat is closed for this task"}
@@ -210,6 +249,11 @@ export function TaskChatModal({
             onChangeText={setInputText}
             editable={isOpen && !isConnecting}
             multiline
+            onFocus={() => {
+              setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }, 150);
+            }}
           />
           <Pressable
             style={[
@@ -222,7 +266,7 @@ export function TaskChatModal({
             <Ionicons name="send" size={18} color="#FFFFFF" />
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </Animated.View>
     </Modal>
   );
 }
@@ -402,7 +446,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
     paddingHorizontal: 12,
-    paddingTop: 10,
+    paddingVertical: 10,
   },
   inputField: {
     flex: 1,
