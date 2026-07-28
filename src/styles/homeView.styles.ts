@@ -200,17 +200,18 @@ export const styles = StyleSheet.create({
     marginRight: 6,
   },
   categoryCardSelected: {
-    transform: [{ scale: 1.05 }],
+    transform: [{ scale: 1.14 }],
+    zIndex: 3,
   },
   categoryIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
   },
   categoryLabel: {
     fontSize: 9,
@@ -219,8 +220,9 @@ export const styles = StyleSheet.create({
     textAlign: 'center',
   },
   categoryLabelSelected: {
-    color: '#10B981',
-    fontWeight: '800',
+    color: '#065F46',
+    fontWeight: '900',
+    fontSize: 10,
   },
   subCategoryContainer: {
     marginTop: 8,
@@ -253,7 +255,8 @@ export const styles = StyleSheet.create({
   subChipActive: {
     backgroundColor: '#ECFDF5',
     borderColor: '#10B981',
-    borderWidth: 1.5,
+    borderWidth: 2,
+    transform: [{ scale: 1.05 }],
   },
   subChipText: {
     fontSize: 12,
@@ -523,8 +526,13 @@ export const styles = StyleSheet.create({
   },
   categoryGridCardSelected: {
     borderColor: '#10B981',
+    borderWidth: 2,
     backgroundColor: '#ECFDF5',
-    transform: [{ scale: 1.02 }],
+    transform: [{ scale: 1.05 }],
+    shadowColor: '#10B981',
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 4,
   },
   categoryGridLabel: {
     fontSize: 11,

@@ -114,8 +114,21 @@ export default function HomeCategoryList({
                       style={[styles.categoryGridCard, isSelected && styles.categoryGridCardSelected]}
                       onPress={() => handleMainCategoryPress(cat.name)}
                     >
-                      <View style={[styles.categoryIconCircle, { backgroundColor: getLightBg(style.color) }]}>
-                        <Ionicons name={style.icon as any} size={22} color={isSelected ? '#10B981' : style.color} />
+                      <View
+                        style={[
+                          styles.categoryIconCircle,
+                          { backgroundColor: isSelected ? style.color : getLightBg(style.color) },
+                          isSelected && {
+                            borderWidth: 2,
+                            borderColor: style.color,
+                            shadowColor: style.color,
+                            shadowOpacity: 0.4,
+                            shadowRadius: 6,
+                            elevation: 5,
+                          },
+                        ]}
+                      >
+                        <Ionicons name={style.icon as any} size={isSelected ? 23 : 21} color={isSelected ? '#FFFFFF' : style.color} />
                       </View>
                       <Text style={[styles.categoryGridLabel, isSelected && styles.categoryGridLabelSelected]} numberOfLines={1}>
                         {cat.name}
@@ -146,8 +159,21 @@ export default function HomeCategoryList({
                         style={[styles.categoryGridCard, isSelected && styles.categoryGridCardSelected]}
                         onPress={() => handleMainCategoryPress(cat.name)}
                       >
-                        <View style={[styles.categoryIconCircle, { backgroundColor: getLightBg(style.color) }]}>
-                          <Ionicons name={style.icon as any} size={22} color={isSelected ? '#10B981' : style.color} />
+                        <View
+                          style={[
+                            styles.categoryIconCircle,
+                            { backgroundColor: isSelected ? style.color : getLightBg(style.color) },
+                            isSelected && {
+                              borderWidth: 2,
+                              borderColor: style.color,
+                              shadowColor: style.color,
+                              shadowOpacity: 0.4,
+                              shadowRadius: 6,
+                              elevation: 5,
+                            },
+                          ]}
+                        >
+                          <Ionicons name={style.icon as any} size={isSelected ? 23 : 21} color={isSelected ? '#FFFFFF' : style.color} />
                         </View>
                         <Text style={[styles.categoryGridLabel, isSelected && styles.categoryGridLabelSelected]} numberOfLines={1}>
                           {cat.name}
@@ -196,8 +222,21 @@ export default function HomeCategoryList({
                   style={[styles.categoryCard, isSelected && styles.categoryCardSelected]}
                   onPress={() => handleMainCategoryPress(cat.name)}
                 >
-                  <View style={[styles.categoryIconCircle, { backgroundColor: getLightBg(style.color) }]}>
-                    <Ionicons name={style.icon as any} size={22} color={isSelected ? '#10B981' : style.color} />
+                  <View
+                    style={[
+                      styles.categoryIconCircle,
+                      { backgroundColor: isSelected ? style.color : getLightBg(style.color) },
+                      isSelected && {
+                        borderWidth: 2,
+                        borderColor: style.color,
+                        shadowColor: style.color,
+                        shadowOpacity: 0.45,
+                        shadowRadius: 6,
+                        elevation: 5,
+                      },
+                    ]}
+                  >
+                    <Ionicons name={style.icon as any} size={isSelected ? 23 : 21} color={isSelected ? '#FFFFFF' : style.color} />
                   </View>
                   <Text style={[styles.categoryLabel, isSelected && styles.categoryLabelSelected]}>
                     {cat.name}
