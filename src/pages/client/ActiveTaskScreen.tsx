@@ -31,7 +31,7 @@ import { CancelProgressModal } from '@/components/client/CancelProgressModal';
 import { TaskSummaryCard } from '@/components/client/TaskSummaryCard';
 import { ClientBidsList } from '@/components/client/ClientBidsList';
 import { AcceptedProCard } from '@/components/client/AcceptedProCard';
-import { AgoraVoipCallModal } from '@/components/common/AgoraVoipCallModal';
+
 
 interface ActiveTaskScreenProps {
   onBack: () => void;
@@ -70,7 +70,7 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
 
   const [proReviewCounts, setProReviewCounts] = useState<Record<number, number>>({});
   const [declinedBidIds, setDeclinedBidIds] = useState<Set<string>>(new Set());
-  const [voipModalVisible, setVoipModalVisible] = useState(false);
+
 
   useEffect(() => {
     const uidsToFetch = new Set<number>();
@@ -362,7 +362,7 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
   };
 
   const handleCall = () => {
-    setVoipModalVisible(true);
+    // Call is now handled inside TaskChatModal's own VoIP modal
   };
   const handleWhatsApp = (bid?: Bid | null) => handleOpenWhatsApp(bid, activeTask?.category);
 
@@ -484,7 +484,7 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
         <ReviewModal isVisible={reviewModalVisible} onClose={() => { setReviewModalVisible(false); setCompletedTaskInfo(null); completeTask(); }} onSubmit={handleCustomerSubmitReview} targetName={completedTaskInfo?.proName || 'Service Provider'} role="customer" taskTitle={completedTaskInfo?.title} />
         <CancelProgressModal visible={isCancelling} stepText={cancellationStep} />
         <UserReviewsModal isVisible={proReviewsVisible} onClose={() => { setProReviewsVisible(false); setSelectedProInfo(null); }} userId={selectedProInfo?.id} userName={selectedProInfo?.name || ''} role="pro" />
-        <AgoraVoipCallModal visible={voipModalVisible} onClose={() => setVoipModalVisible(false)} taskId={taskId} otherUserName={effectiveAcceptedBid?.name || 'Professional'} otherUserAvatar={effectiveAcceptedBid?.avatar} role="customer" />
+
       </View>
     </SafeAreaView>
   );

@@ -48,7 +48,7 @@ export function TaskChatModal({
   const { user } = useAuth();
   const [inputText, setInputText] = useState('');
   const [voipModalVisible, setVoipModalVisible] = useState(false);
-  const [voipCallStatus, setVoipCallStatus] = useState<'calling' | 'connected'>('calling');
+  const [voipCallStatus, setVoipCallStatus] = useState<'calling' | 'connected' | 'ended' | 'declined'>('calling');
   const [incomingCallData, setIncomingCallData] = useState<IncomingCallData | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
@@ -76,9 +76,18 @@ export function TaskChatModal({
           callerName: data.callerName,
           callerAvatar: data.callerAvatar,
         });
-      } else if (data.signal === 'call_declined' || data.signal === 'call_ended') {
+      } else if (data.signal === 'call_declined') {
         setIncomingCallData(null);
-        setVoipModalVisible(false);
+        setVoipCallStatus('declined');
+        setTimeout(() => {
+          setVoipModalVisible(false);
+        }, 1200);
+      } else if (data.signal === 'call_ended') {
+        setIncomingCallData(null);
+        setVoipCallStatus('ended');
+        setTimeout(() => {
+          setVoipModalVisible(false);
+        }, 400);
       } else if (data.signal === 'call_accepted') {
         setIncomingCallData(null);
         setVoipCallStatus('connected');
@@ -93,11 +102,7 @@ export function TaskChatModal({
       caller_name: user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'User',
       caller_avatar: (user as any)?.avatar || (user as any)?.image || '',
     });
-    if (onCall) {
-      onCall();
-    } else {
-      setVoipModalVisible(true);
-    }
+    setVoipModalVisible(true);
   };
 
   const handleAcceptIncoming = () => {

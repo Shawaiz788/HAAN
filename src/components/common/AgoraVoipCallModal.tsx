@@ -5,17 +5,34 @@ import {
   Text,
   Pressable,
   Image,
-  SafeAreaView,
   StatusBar,
   Animated,
   Easing,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  createAgoraRtcEngine,
+  ChannelProfileType,
+  ClientRoleType,
+  IRtcEngine,
+  RtcConnection,
+  IRtcEngineEventHandler,
+} from 'react-native-agora';
+import { generateAgoraToken007 } from '@/utils/agoraTokenBuilder';
 import { styles } from '@/styles/agoraVoipCallModal.styles';
 
-const DEFAULT_AGORA_APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID || process.env.AGORA_APP_ID || '2bda4e2f148148928cc66f14545f6136';
+const AGORA_APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID || process.env.AGORA_APP_ID || '2bda4e2f148148928cc66f14545f6136';
+const AGORA_APP_CERTIFICATE = process.env.EXPO_PUBLIC_AGORA_APP_CERTIFICATE || process.env.AGORA_APP_CERTIFICATE || '';
+const AGORA_TEMP_TOKEN = process.env.EXPO_PUBLIC_AGORA_TEMP_TOKEN || process.env.AGORA_TEMP_TOKEN || '';
+
+export function getAgoraToken(channelName: string, uid: number = 0): string {
+  if (AGORA_TEMP_TOKEN) return AGORA_TEMP_TOKEN;
+  if (!AGORA_APP_CERTIFICATE || !AGORA_APP_ID) return '';
+  return generateAgoraToken007(AGORA_APP_ID, AGORA_APP_CERTIFICATE, channelName, uid);
+}
 
 export interface AgoraVoipCallModalProps {
   visible: boolean;
@@ -24,7 +41,7 @@ export interface AgoraVoipCallModalProps {
   otherUserName: string;
   otherUserAvatar?: string;
   role?: 'customer' | 'pro';
-  initialStatus?: 'calling' | 'connected';
+  initialStatus?: 'calling' | 'connected' | 'ended' | 'declined';
   onEndCallSignal?: () => void;
 }
 
@@ -43,82 +60,160 @@ export function AgoraVoipCallModal({
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [callStatus, setCallStatus] = useState<'calling' | 'connected' | 'ended' | 'declined'>(initialStatus);
   const [durationSeconds, setDurationSeconds] = useState(0);
+  const [remoteUid, setRemoteUid] = useState(0);
 
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const webViewRef = useRef<WebView>(null);
+  const engineRef = useRef<IRtcEngine | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Sync prop changes
+  const channelName = `kaamkarwao_task_${taskId || 'live'}`;
+
+  // Sync initialStatus when prop changes (e.g. remote accepted -> 'connected')
   useEffect(() => {
     if (visible && initialStatus) {
       setCallStatus(initialStatus);
     }
   }, [visible, initialStatus]);
 
-  // Pulse animation for avatar ring while calling/connecting
+  // Pulse animation for avatar ring
   useEffect(() => {
     if (!visible) return;
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.15,
-          duration: 1200,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1200,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
+        Animated.timing(pulseAnim, { toValue: 1.15, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
     pulse.start();
     return () => pulse.stop();
   }, [visible, pulseAnim]);
 
-  // Duration timer ONLY starts when call is connected
+  // Duration timer - only when connected
   useEffect(() => {
     if (visible && callStatus === 'connected') {
-      timerRef.current = setInterval(() => {
-        setDurationSeconds((prev) => prev + 1);
-      }, 1000);
+      timerRef.current = setInterval(() => setDurationSeconds(s => s + 1), 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [visible, callStatus]);
 
-  // Reset state when opening
+  // Reset state on open
   useEffect(() => {
     if (visible) {
       setCallStatus(initialStatus);
       setDurationSeconds(0);
       setIsMuted(false);
+      setIsSpeakerOn(true);
+      setRemoteUid(0);
     }
   }, [visible, initialStatus]);
+
+  // Initialize and join Agora native engine when modal opens
+  useEffect(() => {
+    if (!visible || !taskId) return;
+
+    let isActive = true;
+
+    const setupEngine = async () => {
+      try {
+        if (Platform.OS === 'android') {
+          await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          ]);
+        }
+
+        const engine = createAgoraRtcEngine();
+        await engine.initialize({
+          appId: AGORA_APP_ID,
+          channelProfile: ChannelProfileType.ChannelProfileCommunication,
+        });
+        if (!isActive) {
+          engine.release();
+          return;
+        }
+        engineRef.current = engine;
+
+        const eventHandler: IRtcEngineEventHandler = {
+          onJoinChannelSuccess: (_connection: RtcConnection) => {
+            if (!isActive) return;
+            console.log('[AgoraNative] Joined channel successfully:', channelName);
+            setCallStatus('connected');
+          },
+          onUserJoined: (_connection: RtcConnection, uid: number) => {
+            if (!isActive) return;
+            console.log('[AgoraNative] Remote user joined:', uid);
+            setRemoteUid(uid);
+            setCallStatus('connected');
+          },
+          onUserOffline: (_connection: RtcConnection, uid: number) => {
+            if (!isActive) return;
+            console.log('[AgoraNative] Remote user left:', uid);
+            setRemoteUid(0);
+          },
+          onError: (err: number, msg: string) => {
+            console.warn('[AgoraNative] Engine error:', err, msg);
+          },
+        };
+
+        engine.registerEventHandler(eventHandler);
+        engine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
+        engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
+        engine.enableAudio();
+
+        // Join channel with dynamic token signed by Primary Certificate
+        const token = getAgoraToken(channelName, 0);
+        console.log('[AgoraNative] Joining channel:', channelName, '| AppID:', AGORA_APP_ID, '| AppCert:', AGORA_APP_CERTIFICATE ? 'Configured' : 'Missing', '| TokenPrefix:', token ? token.substring(0, 10) + '...' : 'EMPTY');
+        engine.joinChannel(token, channelName, 0, {
+          channelProfile: ChannelProfileType.ChannelProfileCommunication,
+          clientRoleType: ClientRoleType.ClientRoleBroadcaster,
+          publishMicrophoneTrack: true,
+          autoSubscribeAudio: true,
+        });
+      } catch (e: any) {
+        console.error('[AgoraNative] Exception setup:', e?.message || e);
+      }
+    };
+
+    setupEngine();
+
+    return () => {
+      isActive = false;
+      if (engineRef.current) {
+        try {
+          engineRef.current.leaveChannel();
+          engineRef.current.release();
+        } catch (e) { }
+        engineRef.current = null;
+      }
+    };
+  }, [visible, channelName, taskId]);
 
   if (!visible) return null;
 
   const handleEndCall = () => {
     setCallStatus('ended');
+    if (engineRef.current) {
+      try {
+        engineRef.current.leaveChannel();
+        engineRef.current.release();
+      } catch (e) { }
+      engineRef.current = null;
+    }
     onEndCallSignal?.();
-    setTimeout(() => {
-      onClose();
-    }, 400);
+    setTimeout(() => onClose(), 400);
   };
 
   const toggleMute = () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
-    webViewRef.current?.postMessage(JSON.stringify({ action: 'setMute', muted: nextMuted }));
+    const next = !isMuted;
+    setIsMuted(next);
+    engineRef.current?.muteLocalAudioStream(next);
   };
 
   const toggleSpeaker = () => {
-    setIsSpeakerOn(!isSpeakerOn);
+    const next = !isSpeakerOn;
+    setIsSpeakerOn(next);
+    engineRef.current?.setEnableSpeakerphone(next);
   };
 
   const formatDuration = (sec: number) => {
@@ -127,55 +222,8 @@ export function AgoraVoipCallModal({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const channelName = `kaamkarwao_task_${taskId || 'live'}`;
   const initials = (otherUserName || 'User').charAt(0).toUpperCase();
   const hasAvatar = Boolean(otherUserAvatar && otherUserAvatar.trim().length > 0);
-
-  // Agora WebRTC HTML bundle
-  const agoraHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <script src="https://download.agora.io/sdk/web/AgoraRTC_N-4.20.0.js"></script>
-    </head>
-    <body>
-      <script>
-        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
-        let localAudioTrack = null;
-
-        async function startCall() {
-          try {
-            await client.join("${DEFAULT_AGORA_APP_ID}", "${channelName}", null, null);
-            localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-            await client.publish([localAudioTrack]);
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'connected' }));
-
-            client.on("user-published", async (user, mediaType) => {
-              await client.subscribe(user, mediaType);
-              if (mediaType === "audio") {
-                user.audioTrack.play();
-              }
-            });
-          } catch (e) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: e.message }));
-          }
-        }
-
-        window.addEventListener('message', (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.action === 'setMute' && localAudioTrack) {
-              localAudioTrack.setEnabled(!data.muted);
-            }
-          } catch(e) {}
-        });
-
-        startCall();
-      </script>
-    </body>
-    </html>
-  `;
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={handleEndCall}>
@@ -189,7 +237,7 @@ export function AgoraVoipCallModal({
           </Pressable>
         </View>
 
-        {/* Profile Details & Ambient Pulse */}
+        {/* Profile Section */}
         <View style={styles.profileSection}>
           <Animated.View style={[styles.avatarRingOuter, { transform: [{ scale: pulseAnim }] }]}>
             <View style={styles.avatarRingInner}>
@@ -218,19 +266,12 @@ export function AgoraVoipCallModal({
           )}
         </View>
 
-        {/* Call Action Controls */}
+        {/* Controls */}
         <View style={styles.controlsContainer}>
           {/* Mute Button */}
           <View style={{ alignItems: 'center' }}>
-            <Pressable
-              style={[styles.controlButton, isMuted && styles.controlButtonActive]}
-              onPress={toggleMute}
-            >
-              <Ionicons
-                name={isMuted ? 'mic-off' : 'mic'}
-                size={28}
-                color={isMuted ? '#09101D' : '#FFFFFF'}
-              />
+            <Pressable style={[styles.controlButton, isMuted && styles.controlButtonActive]} onPress={toggleMute}>
+              <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={28} color={isMuted ? '#09101D' : '#FFFFFF'} />
             </Pressable>
             <Text style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</Text>
           </View>
@@ -242,39 +283,15 @@ export function AgoraVoipCallModal({
 
           {/* Speaker Button */}
           <View style={{ alignItems: 'center' }}>
-            <Pressable
-              style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]}
-              onPress={toggleSpeaker}
-            >
-              <Ionicons
-                name={isSpeakerOn ? 'volume-high' : 'volume-medium'}
-                size={28}
-                color={isSpeakerOn ? '#09101D' : '#FFFFFF'}
-              />
+            <Pressable style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]} onPress={toggleSpeaker}>
+              <Ionicons name={isSpeakerOn ? 'volume-high' : 'volume-medium'} size={28} color={isSpeakerOn ? '#09101D' : '#FFFFFF'} />
             </Pressable>
             <Text style={styles.controlLabel}>Speaker</Text>
           </View>
-        </View>
-
-        {/* Hidden WebRTC Engine WebView */}
-        <View style={styles.hiddenWebView}>
-          <WebView
-            ref={webViewRef}
-            originWhitelist={['*']}
-            source={{ html: agoraHtml }}
-            mediaPlaybackRequiresUserAction={false}
-            allowsInlineMediaPlayback={true}
-            onMessage={(event) => {
-              try {
-                const data = JSON.parse(event.nativeEvent.data);
-                if (data.type === 'connected') {
-                  setCallStatus('connected');
-                }
-              } catch (e) { }
-            }}
-          />
         </View>
       </View>
     </Modal>
   );
 }
+
+export default AgoraVoipCallModal;

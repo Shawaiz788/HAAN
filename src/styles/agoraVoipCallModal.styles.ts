@@ -131,7 +131,9 @@ export const styles = StyleSheet.create({
   hiddenWebView: {
     width: 1,
     height: 1,
-    opacity: 0,
     position: 'absolute',
+    top: -9999,
+    left: -9999,
+    overflow: 'hidden',
   },
 });
