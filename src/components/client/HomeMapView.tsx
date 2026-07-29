@@ -43,9 +43,9 @@ export const getLeafletHtml = (lat: number, lng: number) => `
         L.polygon(polygonCoords, {
           color: '#059669',
           weight: 2,
-          opacity: 0.85,
+          opacity: 0.15,
           fillColor: '#10B981',
-          fillOpacity: 0.16,
+          fillOpacity: 0.05,
           smoothFactor: 1.0
         }).addTo(map);
       }

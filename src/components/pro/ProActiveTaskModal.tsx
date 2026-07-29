@@ -106,6 +106,13 @@ export default function ProActiveTaskModal({
         }
     }, [isVisible, job, loadCustomerProfile]);
 
+    useEffect(() => {
+        if (isCancelled) {
+            setChatVisible(false);
+            setCustomerReviewsVisible(false);
+        }
+    }, [isCancelled]);
+
     if (!job || !isVisible) return null;
 
     const activeProfile = fetchedProfile || job.customer_profile;
