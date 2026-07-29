@@ -93,6 +93,7 @@ export function useTaskChatWebSocket({
     });
   }, [messages, attachmentCache, taskId]);
 
+  // Transmits dual-channel VoIP signals: sends in-band text fallback ([VOICE_CALL_SIGNAL:...]) + JSON event (voice_call_signal)
   const sendCallSignal = useCallback((signal: 'incoming_call' | 'call_accepted' | 'call_declined' | 'call_ended', extraPayload?: any) => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
     try {

@@ -81,7 +81,7 @@ const useCategoryStore = create<CategoryStoreState>((set, get) => ({
 
         set({ loading: true });
         try {
-            //console.log('[categoryStore] Fetching categories and subcategories...');
+            console.log('[categoryStore] Fetching categories and subcategories...');
             const [catData, subData] = await Promise.all([
                 getCategoriesFromBackend().catch(() => categories),
                 categoryService.getSubcategories().catch((err) => {
@@ -89,15 +89,15 @@ const useCategoryStore = create<CategoryStoreState>((set, get) => ({
                     return subcategories;
                 }),
             ]);
-            console.log(
-                '[categoryStore] Loaded categories count:',
-                catData?.length,
-                'Subcategories count:',
-                subData?.length
-            );
+            // console.log(
+            //     '[categoryStore] Loaded categories count:',
+            //     catData?.length,
+            //     'Subcategories count:',
+            //     subData?.length
+            // );
             set({ categories: catData || [], subcategories: subData || [], fetched: true });
         } catch (err) {
-            //  console.error('[categoryStore] Failed to fetch categories/subcategories:', err);
+            console.error('[categoryStore] Failed to fetch categories/subcategories:', err);
         } finally {
             set({ loading: false });
         }

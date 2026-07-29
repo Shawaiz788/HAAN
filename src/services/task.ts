@@ -94,7 +94,11 @@ export const uploadAttachment = async (uri: string, taskId: number): Promise<{ i
   }
 };
 
-// Fetch attachment details by ID (with fallback to Task attachments list)
+/**
+ * Fetches attachment details with 2-stage fallback:
+ * 1. Queries single attachment endpoint /app/attachment/{id}/
+ * 2. If single lookup fails or returns empty, queries parent task attachments list /app/attachment/{taskId}/
+ */
 export const getAttachmentById = async (
   attachmentId: number | string,
   taskId?: number | string

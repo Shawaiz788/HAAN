@@ -51,7 +51,7 @@ export const getLeafletHtml = (lat: number, lng: number) => `
       }
     }
 
-    // Initial offset so coordinates align under the pin (at 35% height)
+    // Initial offset calculation: shifts map center to 35% screen height so pin sits cleanly above bottom sheet
     map.whenReady(function() {
       var size = map.getSize();
       var tgt = L.point(size.x / 2, size.y * 0.35);
@@ -60,7 +60,7 @@ export const getLeafletHtml = (lat: number, lng: number) => `
     });
 
     map.on('moveend', function() {
-      // Read coordinates directly under the visual pin at 35% screen height
+      // Reads lat/lng coordinates located directly underneath the pin overlay (35% screen height)
       var size = map.getSize();
       var pinPoint = L.point(size.x / 2, size.y * 0.35);
       var pinCoords = map.containerPointToLatLng(pinPoint);

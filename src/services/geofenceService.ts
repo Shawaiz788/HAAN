@@ -203,7 +203,8 @@ function normalize(str: string): string {
 
 /**
  * Standard Ray-Casting Point-in-Polygon Algorithm.
- * Determines if point (lat, lng) is physically inside polygon vertices array.
+ * Casts a horizontal ray eastward from (lat, lng) and counts boundary segment intersections.
+ * An odd number of intersections indicates the point is inside the polygon.
  */
 export const isPointInPolygon = (
   lat: number,
@@ -217,6 +218,7 @@ export const isPointInPolygon = (
     const xi = polygon[i][0], yi = polygon[i][1];
     const xj = polygon[j][0], yj = polygon[j][1];
 
+    // Check ray intersection with polygon segment (xi, yi) -> (xj, yj)
     const intersect =
       yi > lng !== yj > lng &&
       lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi;

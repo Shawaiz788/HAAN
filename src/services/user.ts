@@ -308,13 +308,13 @@ export const getUserReviewCount = async (userId: number): Promise<number> => {
         const url = `${API_URL}/app/review/customer/${userId}/`;
         const response = await fetchWithAuth(url);
         if (!response.ok) {
-            logger.warn(`[getUserReviewCount] Non-OK status ${response.status} from ${url}, falling back to getUserReviews`);
+            // logger.warn(`[getUserReviewCount] Non-OK status ${response.status} from ${url}, falling back to getUserReviews`);
             const reviews = await getUserReviews(userId);
             return reviews.length;
         }
 
         const text = await response.text();
-        logger.log(`[getUserReviewCount] Response text for user ${userId}:`, text);
+        // logger.log(`[getUserReviewCount] Response text for user ${userId}:`, text);
         const data = JSON.parse(text);
 
         if (typeof data === 'number') return data;
@@ -331,7 +331,7 @@ export const getUserReviewCount = async (userId: number): Promise<number> => {
         }
         return 0;
     } catch (err) {
-        logger.warn(`[getUserReviewCount] Error fetching review count for user ${userId}:`, err);
+        // logger.warn(`[getUserReviewCount] Error fetching review count for user ${userId}:`, err);
         try {
             const reviews = await getUserReviews(userId);
             return reviews.length;

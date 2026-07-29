@@ -32,7 +32,6 @@ import { TaskSummaryCard } from '@/components/client/TaskSummaryCard';
 import { ClientBidsList } from '@/components/client/ClientBidsList';
 import { AcceptedProCard } from '@/components/client/AcceptedProCard';
 
-
 interface ActiveTaskScreenProps {
   onBack: () => void;
 }
@@ -69,8 +68,6 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
   });
 
   const [proReviewCounts, setProReviewCounts] = useState<Record<number, number>>({});
-  const [declinedBidIds, setDeclinedBidIds] = useState<Set<string>>(new Set());
-
 
   useEffect(() => {
     const uidsToFetch = new Set<number>();
@@ -95,21 +92,19 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
     });
   }, [wsBids, activeTask?.acceptedBid?.user_id]);
 
-  const bids: Bid[] = wsBids
-    .filter((b) => !declinedBidIds.has(String(b.id)))
-    .map((b) => ({
-      id: String(b.id),
-      user_id: Number(b.user_id),
-      name: b.user_name || (b.is_profile_loading ? '' : `Professional #${b.user_id}`),
-      avatar: b.user_avatar || '',
-      rating: b.user_rating || 4.8,
-      reviewsCount: proReviewCounts[Number(b.user_id)] ?? 0,
-      price: b.price,
-      timeEstimate: b.estimated_hours ? `${b.estimated_hours * 60} min` : '15 min',
-      message: b.estimated_hours ? `Estimated duration: ${b.estimated_hours} hours` : 'Ready to perform task',
-      phone_number: b.phone_number,
-      is_profile_loading: Boolean(b.is_profile_loading),
-    }));
+  const bids: Bid[] = wsBids.map((b) => ({
+    id: String(b.id),
+    user_id: Number(b.user_id),
+    name: b.user_name || (b.is_profile_loading ? '' : `Professional #${b.user_id}`),
+    avatar: b.user_avatar || '',
+    rating: b.user_rating || 4.8,
+    reviewsCount: proReviewCounts[Number(b.user_id)] ?? 0,
+    price: b.price,
+    timeEstimate: b.estimated_hours ? `${b.estimated_hours * 60} min` : '15 min',
+    message: b.estimated_hours ? `Estimated duration: ${b.estimated_hours} hours` : 'Ready to perform task',
+    phone_number: b.phone_number,
+    is_profile_loading: Boolean(b.is_profile_loading),
+  }));
 
   const handleAcceptBid = (bid: Bid) => {
     sendWsAcceptBid(bid.id);
@@ -232,6 +227,9 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
         is_profile_loading: false,
       };
       contextAcceptBid(updatedBid.id, updatedBid);
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Profile loaded successfully!', ToastAndroid.SHORT);
+      }
     } catch (err) {
       console.warn('[ActiveTaskScreen] Retry profile failed:', err);
       Alert.alert('Profile Error', 'Failed to fetch professional profile. Please check your network and try again.');
@@ -274,7 +272,7 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
           cancelTask();
         }
       } catch (err) {
-        console.warn('[ActiveTaskScreen] Error polling task status:', err);
+        // console.warn('[ActiveTaskScreen] Error polling task status:', err);
       }
     };
 
@@ -354,16 +352,10 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
   }
 
   const handleDeclineBid = (bidId: string) => {
-    setDeclinedBidIds((prev) => {
-      const next = new Set(prev);
-      next.add(String(bidId));
-      return next;
-    });
+    Alert.alert('Decline Bid', 'You have declined this offer.');
   };
 
-  const handleCall = () => {
-    // Call is now handled inside TaskChatModal's own VoIP modal
-  };
+  const handleCall = (bid?: Bid | null) => handleMakePhoneCall(bid);
   const handleWhatsApp = (bid?: Bid | null) => handleOpenWhatsApp(bid, activeTask?.category);
 
   const handleCancelTask = async () => {
@@ -457,7 +449,7 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
             <AcceptedProCard
               acceptedBid={effectiveAcceptedBid}
               activeChatMessagesCount={activeChatMessages.length}
-              onCall={handleCall}
+              onCall={() => handleCall(effectiveAcceptedBid)}
               onWhatsApp={() => handleWhatsApp(effectiveAcceptedBid)}
               onOpenChat={() => setChatVisible(true)}
               onSelectPro={(proId, name) => {
@@ -479,12 +471,14 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
 
         {/* Task Chat Modal */}
         {activeTask.status === 'accepted' && activeTask.acceptedBid && (
-          <ClientChatModal visible={chatVisible} onClose={() => setChatVisible(false)} taskId={taskId} proAvatar={activeTask.acceptedBid.avatar} proName={activeTask.acceptedBid.name} onCall={handleCall} />
+          <ClientChatModal visible={chatVisible} onClose={() => setChatVisible(false)} taskId={taskId} proAvatar={activeTask.acceptedBid.avatar} proName={activeTask.acceptedBid.name} onCall={() => handleCall(activeTask.acceptedBid!)} />
         )}
+        {/* Customer Review Modal */}
         <ReviewModal isVisible={reviewModalVisible} onClose={() => { setReviewModalVisible(false); setCompletedTaskInfo(null); completeTask(); }} onSubmit={handleCustomerSubmitReview} targetName={completedTaskInfo?.proName || 'Service Provider'} role="customer" taskTitle={completedTaskInfo?.title} />
+        {/* Progressive Cancellation Overlay */}
         <CancelProgressModal visible={isCancelling} stepText={cancellationStep} />
+        {/* Pro Reviews Modal */}
         <UserReviewsModal isVisible={proReviewsVisible} onClose={() => { setProReviewsVisible(false); setSelectedProInfo(null); }} userId={selectedProInfo?.id} userName={selectedProInfo?.name || ''} role="pro" />
-
       </View>
     </SafeAreaView>
   );

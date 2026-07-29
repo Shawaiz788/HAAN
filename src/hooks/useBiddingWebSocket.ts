@@ -94,6 +94,7 @@ export function useBiddingWebSocket({
     const shouldConnectRef = useRef(false);
     const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
+    // Queue buffers for user actions (place bid / accept bid) executed before socket connection opens
     const pendingBidRef = useRef<{ payload: any } | null>(null);
     const pendingAcceptRef = useRef<{ payload: any } | null>(null);
 
@@ -128,6 +129,7 @@ export function useBiddingWebSocket({
         }
     };
 
+    // Fetches full user profile details (avatar, name, rating) asynchronously for newly received bids
     const enrichBidProfile = useCallback(async (bid: BidsWSBid) => {
         if (!bid.user_id) return;
         try {
@@ -194,6 +196,7 @@ export function useBiddingWebSocket({
         logger.log('[useBiddingWebSocket] Connecting to:', url);
         setWsStatus('connecting');
 
+        // Watchdog timer: forces socket teardown & reconnect if TCP handshake hangs in CONNECTING state > 10s
         clearWatchdogTimer();
         watchdogTimerRef.current = setTimeout(() => {
             if (!isMountedRef.current || !shouldConnectRef.current) return;

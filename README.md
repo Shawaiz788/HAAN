@@ -547,6 +547,17 @@ The app uses a centralized color system with distinct palettes:
 - **Digital Wallet** — Balance display with auto-creation, pull-to-refresh, and error retry
 - **Saved Addresses** — CRUD for frequently used locations
 
+### 🗺️ Customer Location, Pin Math & Geofencing System
+
+The customer home view incorporates a custom-engineered map and location management architecture:
+
+- **HTML5 Leaflet Engine (`HomeMapView.tsx`)** — Embedded Leaflet.js inside a React Native `WebView` with CartoDB tile layers, avoiding proprietary Google Maps API key constraints.
+- **35% Viewport Pin Offset Math** — Because the persistent sliding bottom sheet covers the lower 65% of the screen, coordinates are dynamically projected to 35% screen height (`L.point(size.x / 2, size.y * 0.35)`). When the user drags the map, Leaflet translates the point at 35% height back into geographic lat/lng coordinates and posts a `REGION_CHANGED` message to React Native.
+- **Polygon Geofencing Engine (`geofenceService.ts`)** — Evaluates user coordinates against real-world 15-to-22-vertex boundary polygons for supported housing societies (Bahria Town, DHA, Model Town, Gulberg, Johar Town, etc.) using a **Ray-Casting Point-in-Polygon algorithm**.
+- **Vector Edge Buffer Tolerance** — Calculates shortest distance to polygon boundary segments using vector projection (`getDistanceFromPointToSegmentMeters`). Locations within 250 meters of polygon perimeters remain valid; outside coordinates trigger a red `"Services Not Available"` badge on the map pin.
+- **Instant MMKV Cache & Profile Sync (`useHomeViewLocation.ts`)** — Initializes map coordinates instantly from synchronous MMKV storage on startup, while an asynchronous effect syncs saved user profile address records (`/app/location/{id}/`).
+- **Nominatim Search & Pin Adjuster (`SearchLocationModal.tsx` & `PinAdjusterModal.tsx`)** — Address searches use OpenStreetMap's Nominatim API with 300ms debouncing and coordinate viewbox biasing, supported by a full-screen pin placement modal for fine-tuning service drop-off coordinates.
+
 ### For Professionals
 - **Live Job Feed** — WebSocket-powered real-time job stream with distance calculation
 - **Push Notifications** — Local notifications for new tasks even when app is backgrounded

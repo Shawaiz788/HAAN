@@ -66,6 +66,11 @@ export interface LocationChainInput {
   formatted_address?: string;
 }
 
+/**
+ * Resolves or provisions a complete geographic location entity chain (Country -> City -> Area -> Location):
+ * - Fast path: Skips API lookups if city/area IDs are pre-selected in UI state.
+ * - Slow path: Performs cascading lookup/creation of missing country, city, and area records in database.
+ */
 export const getOrCreateLocationChain = async (input: LocationChainInput): Promise<UserLocation> => {
   const { countryName, cityName, areaName, houseNumber, streetNumber, latitude, longitude, zipCode, formatted_address } = input;
   logger.log('[LocationChain] Starting resolution for:', input);

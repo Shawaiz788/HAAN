@@ -46,6 +46,7 @@ export function useHomeViewLocation({ webViewRef }: UseHomeViewLocationProps) {
   const [locCity, setLocCity] = useState(cached.city || '');
   const [locSearchLoading, setLocSearchLoading] = useState(false);
 
+  // Performs reverse geocoding on lat/lng coordinates, validates polygon geofencing, and persists to MMKV cache
   const reverseGeocode = async (lat: number, lng: number) => {
     try {
       let response = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
@@ -96,6 +97,7 @@ export function useHomeViewLocation({ webViewRef }: UseHomeViewLocationProps) {
     }
   };
 
+  // Re-centers map around current device GPS coordinates with 2.5s timeout & fallback to last known location
   const reCenterMap = async () => {
     setIsGeocoding(true);
     try {
