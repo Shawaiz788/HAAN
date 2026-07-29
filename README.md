@@ -63,7 +63,9 @@ A premium, production-grade on-demand services marketplace built with **Expo SDK
 | **Expo Location** | ![Loc](https://img.shields.io/badge/Location-GPS-059669?style=for-the-badge&logo=googlemaps&logoColor=white) | Real-time GPS tracking for professionals |
 | **React Native Maps** | ![Maps](https://img.shields.io/badge/RN_Maps-Google-4285F4?style=for-the-badge&logo=googlemaps&logoColor=white) | Native Google Maps integration |
 | **WebView + Leaflet** | ![Leaflet](https://img.shields.io/badge/Leaflet-WebView-10B981?style=for-the-badge&logo=leaflet&logoColor=white) | Instant-mount interactive maps with Nominatim search |
-| **WebSocket** | ![WS](https://img.shields.io/badge/WebSocket-Realtime-22C55E?style=for-the-badge) | Live job feeds & real-time bidding channels |
+| **react-native-agora** | ![Agora](https://img.shields.io/badge/Agora_RTC-v4.6.2-099DFD?style=for-the-badge&logo=agora&logoColor=white) | Native in-app VoIP voice calling SDK |
+| **Expo Image Picker** | ![Picker](https://img.shields.io/badge/Expo_Image_Picker-v16-4630EB?style=for-the-badge&logo=expo&logoColor=white) | Multi-media attachment selection |
+| **WebSocket** | ![WS](https://img.shields.io/badge/WebSocket-Realtime-22C55E?style=for-the-badge) | Live job feeds, bidding, task chat, and VoIP call signals |
 
 ---
 
@@ -158,6 +160,12 @@ KaamKarwao/
 │   │   ├── ErrorBoundary.tsx       # React error boundary with fallback UI
 │   │   ├── ReviewModal.tsx         # Submit review modal
 │   │   ├── UserReviewsModal.tsx    # View user reviews modal
+│   │   ├── common/                 # Shared modals & primitives
+│   │   │   ├── TaskChatModal.tsx   # Task chat modal with image attachments & VoIP trigger
+│   │   │   ├── ChatMessageBubble.tsx # Message bubble for text & image attachments
+│   │   │   ├── ChatImagePreviewModal.tsx # Full-screen image lightbox preview
+│   │   │   ├── AgoraVoipCallModal.tsx # Native Agora RTC voice calling modal
+│   │   │   └── IncomingCallModal.tsx  # Incoming ringing call modal
 │   │   ├── client/                 # Client-specific components
 │   │   │   ├── HomeMapView.tsx     # Leaflet/WebView map with pin adjustment
 │   │   │   ├── HomeBottomSheet.tsx # Task posting bottom sheet (category, budget, description)
@@ -201,6 +209,7 @@ KaamKarwao/
 │   │       └── WalletView.tsx      # Shared wallet component (client & pro)
 │   │
 │   ├── hooks/                      # 🪝 Custom React Hooks
+│   │   ├── useTaskChatWebSocket.ts # Task chat WebSocket + attachment caching & resolution
 │   │   ├── useProWebSocket.ts      # Global singleton WebSocket for live job feed
 │   │   ├── useBiddingWebSocket.ts  # Per-task bidding WebSocket channel
 │   │   ├── useHomeViewLocation.ts  # GPS + geocoding + MMKV location persistence
@@ -237,7 +246,8 @@ KaamKarwao/
 │   │
 │   ├── services/                   # 🌐 API Service Layer
 │   │   ├── fetchClient.ts          # Core HTTP client (timeout, auth headers, JWT refresh, 401 retry)
-│   │   ├── task.ts                 # Task CRUD, chain creation, status updates
+│   │   ├── agoraService.ts         # Dynamic Agora RTC call token fetch (/app/message/room/{id}/call-token/)
+│   │   ├── task.ts                 # Task CRUD, chain creation, attachment upload, getAttachmentById
 │   │   ├── user.ts                 # User registration, login, profile updates
 │   │   ├── bidding.ts              # Bid placement API
 │   │   ├── wallet.ts               # Wallet GET/POST with auto-creation
@@ -270,6 +280,8 @@ KaamKarwao/
 │   │   └── post-job.tsx            # PostJobProvider — task creation, bidding, chat state machine
 │   │
 │   ├── styles/                     # 🎨 Extracted StyleSheet Files
+│   │   ├── taskChatModal.styles.ts # Chat modal & attachment bubble styles
+│   │   ├── agoraVoipCallModal.styles.ts # VoIP call UI styles
 │   │   ├── homeView.styles.ts      # Client home screen styles
 │   │   ├── activeTaskScreen.styles.ts
 │   │   ├── proLiveJobsView.styles.ts
@@ -431,6 +443,13 @@ The app maintains **two WebSocket channels** for different real-time use cases:
 - **Messages:** `bid_placed`, `bid_accepted`, `bid_history`, `bidding_closed`
 - **Actions:** `placeBid()`, `acceptBid()`, `closeSocket()`
 
+### 3. Task Chat & VoIP Signaling WebSocket (`useTaskChatWebSocket.ts`)
+
+- **Scope:** Per-task connection created when entering a active task chat room
+- **Purpose:** Real-time messaging, image attachment delivery, and WebRTC ringing signals
+- **Messages:** `send_message`, `message_received`, `message_history`, `[VOICE_CALL_SIGNAL:...]`
+- **Capabilities:** Automatic attachment URL resolution, message history pagination (`fetchOlderMessages`), and ringing call triggers
+
 ### Real-Time Interaction Flow
 
 ```mermaid
@@ -451,6 +470,22 @@ sequenceDiagram
     Server->>Professional: WS: bid_accepted {task, bid}
     Note over Customer, Professional: Both transition to Active Task view
 ```
+
+### 🎙️ Native Agora VoIP Calling System
+
+The app features cross-platform native audio calling powered by **`react-native-agora` v4.6.2**:
+
+- **Dynamic Token Endpoint:** Fetches RTC tokens from `GET ${API_URL}/app/message/room/${taskId}/call-token/` (`agoraService.ts`).
+- **Channel Authorization:** Binds `currentUserId` (`Number(user.id)`) to `engine.joinChannel(token, channel_name, currentUserId)` matching backend authorization.
+- **In-App Call Controls:** Active duration timer, microphone mute (`muteLocalAudioStream`), speakerphone toggle (`setEnableSpeakerphone`), and remote user listener (`onUserJoined`, `onUserOffline`).
+- **WebSocket Call Signals:** Ringing modal (`IncomingCallModal.tsx`) triggered via `[VOICE_CALL_SIGNAL:incoming_call:...]` socket payloads.
+
+### 🖼️ Chat Attachment & Resolution Cache
+
+- **Multipart Upload:** Image attachments are uploaded via `POST /app/attachment/` returning `{ id, url }`.
+- **Immediate Local Cache:** Uploaded URLs are cached locally instantly in `attachmentCache[id]` for zero-latency rendering.
+- **Automatic Fallback Resolution:** Inbound messages with `attachment_id` query `GET /app/attachment/${attachmentId}/`, with automatic fallback to `GET /app/attachment/${taskId}/` if single lookup yields empty array.
+- **Full-Screen Lightbox:** Tapping chat images opens `ChatImagePreviewModal.tsx` for full-screen preview.
 
 ---
 
@@ -608,7 +643,17 @@ npx expo run:android --device
 npx expo run:ios
 ```
 
-### 5. Available Scripts
+### 5. Build Standalone Production Release APK
+To compile a standalone, signed production Android release APK locally:
+
+```powershell
+cd android; .\gradlew assembleRelease; cd ..
+```
+
+📁 **Generated APK Output Location:**
+`android\app\build\outputs\apk\release\app-release.apk`
+
+### 6. Available Scripts
 ```bash
 npm start          # Start Expo dev server
 npm run android    # Build & run on Android
@@ -623,6 +668,7 @@ npm run web        # Start web bundle
 | Variable | Required | Description |
 |---|---|---|
 | `EXPO_PUBLIC_API_URL` | ✅ | Backend API base URL (e.g., `https://api.kaamkarwao.com/`) |
+| `EXPO_PUBLIC_AGORA_APP_ID` | ✅ | Agora App ID for native VoIP voice calls |
 
 
 ---

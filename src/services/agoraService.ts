@@ -1,7 +1,7 @@
 import { fetchWithTimeout, API_URL } from './fetchClient';
 import { logger } from '@/utils/logger';
 
-const AGORA_APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID || '2bda4e2f148148928cc66f14545f6136';
+const AGORA_APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID;
 
 export interface AgoraCallTokenResponse {
   token: string;
