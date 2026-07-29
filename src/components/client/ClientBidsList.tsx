@@ -80,7 +80,7 @@ export function ClientBidsList({
                     <View style={styles.ratingRow}>
                       <Ionicons name="star" size={14} color="#F59E0B" />
                       <Text style={styles.ratingText}>
-                        {bid.rating} ({bid.reviewsCount} reviews)
+                        {bid.rating} ({bid.reviewsCount ? `${bid.reviewsCount} review${bid.reviewsCount > 1 ? 's' : ''}` : '0 reviews'})
                       </Text>
                     </View>
                   </View>

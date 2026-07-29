@@ -28,6 +28,12 @@ export function AcceptedProCard({
   const isFallbackName = !acceptedBid.name || acceptedBid.name.startsWith('Professional #') || acceptedBid.name.startsWith('Worker #');
   const showRetry = Boolean(onRetryProfile && (acceptedBid.is_profile_loading || isFallbackName));
 
+  const formatReviewsCount = (count?: number | null) => {
+    if (count === undefined || count === null) return 'reviews unverified';
+    if (count === 0) return '0 reviews';
+    return `${count} review${count > 1 ? 's' : ''}`;
+  };
+
   return (
     <View style={styles.acceptedSection}>
       <View style={styles.alertSuccess}>
@@ -43,14 +49,36 @@ export function AcceptedProCard({
       {acceptedBid.is_profile_loading ? (
         <View style={styles.proProfileCard}>
           <View style={[styles.proLargeAvatar, styles.skeletonBox]} />
-          <View style={[styles.skeletonLine, { width: 140, height: 20, marginBottom: 8 }]} />
-          <View style={[styles.skeletonLine, { width: 100, height: 14, marginBottom: 16 }]} />
+          <View style={[styles.skeletonLine, { width: 160, height: 20, marginBottom: 8 }]} />
+          <View style={[styles.skeletonLine, { width: 110, height: 14, marginBottom: 12 }]} />
+          <Text style={{
+            fontSize: 12,
+            color: showRetry && !isRetryingProfile ? '#DC2626' : '#6B7280',
+            marginBottom: 12,
+            fontWeight: showRetry && !isRetryingProfile ? '500' : '400',
+          }}>
+            {isRetryingProfile
+              ? 'Retrying profile fetch...'
+              : showRetry
+              ? 'Unable to load professional profile'
+              : 'Loading professional profile...'}
+          </Text>
           {showRetry && (
             <Pressable
-              style={{ paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#E5E7EB', borderRadius: 8, marginTop: 8 }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 8,
+                paddingHorizontal: 16,
+                backgroundColor: '#F3F4F6',
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: '#E5E7EB',
+              }}
               onPress={onRetryProfile}
               disabled={isRetryingProfile}
             >
+              <Ionicons name="refresh" size={14} color="#374151" style={{ marginRight: 6 }} />
               <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151' }}>
                 {isRetryingProfile ? 'Retrying...' : 'Retry Loading Profile'}
               </Text>
@@ -73,7 +101,7 @@ export function AcceptedProCard({
             <View style={styles.proLargeRating}>
               <Ionicons name="star" size={18} color="#F59E0B" style={{ marginRight: 4 }} />
               <Text style={styles.proLargeRatingText}>
-                {acceptedBid.rating} ({acceptedBid.reviewsCount} reviews)
+                {acceptedBid.rating} ({formatReviewsCount(acceptedBid.reviewsCount)})
               </Text>
             </View>
             <Text style={styles.tapToViewReviewsHint}>Tap profile to see reviews</Text>

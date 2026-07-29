@@ -295,11 +295,49 @@ export const getUserReviews = async (userId: number, forceRefresh = false): Prom
     try {
         const data = JSON.parse(responseText);
         const allReviews: UserReview[] = Array.isArray(data) ? data : (data.results || data.reviews || []);
-        const userReviews = allReviews.filter((r) => Number(r.user_id) === Number(userId));
+        const userReviews = allReviews.filter((r) => Number((r as any).user_id || (r as any).user) === Number(userId));
         customerReviewsCache.set(userId, { data: userReviews, timestamp: Date.now() });
         return userReviews;
     } catch (e) {
         throw new Error(`Failed to parse reviews response. Content: ${responseText}`);
+    }
+};
+
+export const getUserReviewCount = async (userId: number): Promise<number> => {
+    try {
+        const url = `${API_URL}/app/review/customer/${userId}/`;
+        const response = await fetchWithAuth(url);
+        if (!response.ok) {
+            logger.warn(`[getUserReviewCount] Non-OK status ${response.status} from ${url}, falling back to getUserReviews`);
+            const reviews = await getUserReviews(userId);
+            return reviews.length;
+        }
+
+        const text = await response.text();
+        logger.log(`[getUserReviewCount] Response text for user ${userId}:`, text);
+        const data = JSON.parse(text);
+
+        if (typeof data === 'number') return data;
+        if (data && typeof data === 'object') {
+            if (typeof data.count === 'number') return data.count;
+            if (typeof data.reviews_count === 'number') return data.reviews_count;
+            if (typeof data.review_count === 'number') return data.review_count;
+            if (typeof data.total_reviews === 'number') return data.total_reviews;
+            if (typeof data.total === 'number') return data.total;
+            if (typeof data.number_of_reviews === 'number') return data.number_of_reviews;
+            if (typeof data.number === 'number') return data.number;
+            if (Array.isArray(data)) return data.length;
+            if (Array.isArray(data.results)) return data.results.length;
+        }
+        return 0;
+    } catch (err) {
+        logger.warn(`[getUserReviewCount] Error fetching review count for user ${userId}:`, err);
+        try {
+            const reviews = await getUserReviews(userId);
+            return reviews.length;
+        } catch {
+            return 0;
+        }
     }
 };
 

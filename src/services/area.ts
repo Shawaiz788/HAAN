@@ -15,13 +15,13 @@ export const getAreas = async (forceRefresh: boolean = false): Promise<Area[]> =
 
   // If cached areas exist and cache is fresh, return immediately (0ms delay)
   if (cached.length > 0 && !forceRefresh && !isGeoCacheStale()) {
-    logger.log(`[area API] ⚡ Returning ${cached.length} areas instantly from MMKV cache`);
+    //logger.log(`[area API] ⚡ Returning ${cached.length} areas instantly from MMKV cache`);
     return cached;
   }
 
   // If cached areas exist but stale, trigger non-blocking background sync
   if (cached.length > 0 && !forceRefresh) {
-    logger.log(`[area API] ⚡ Returning ${cached.length} cached areas & triggering background sync`);
+    // logger.log(`[area API] ⚡ Returning ${cached.length} cached areas & triggering background sync`);
     fetchAreasFromApiAndCache().catch((err) =>
       logger.warn('[area API] Background area sync warning:', err)
     );

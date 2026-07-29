@@ -133,7 +133,7 @@ export interface Bid {
   name: string;
   avatar: string;
   rating: number;
-  reviewsCount: number;
+  reviewsCount?: number;
   price: number;
   timeEstimate: string;
   message: string;

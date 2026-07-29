@@ -382,10 +382,10 @@ export const getOpenTasksFromBackend = async (): Promise<BackendTask[]> => {
 
 export const getTaskByIdFromBackend = async (taskId: number): Promise<BackendTask | null> => {
   const url = `${API_URL}/app/task/${taskId}/`;
-  logger.log(`[getTaskByIdFromBackend] Fetching task ${taskId} from URL: ${url}`);
+  // logger.log(`[getTaskByIdFromBackend] Fetching task ${taskId} from URL: ${url}`);
   const response = await fetchWithAuth(url);
   const responseText = await response.text();
-  logger.log(`[getTaskByIdFromBackend] Status for task ${taskId}: ${response.status}`);
+  //logger.log(`[getTaskByIdFromBackend] Status for task ${taskId}: ${response.status}`);
 
   if (!response.ok) {
     if (response.status === 404) return null;
@@ -395,7 +395,7 @@ export const getTaskByIdFromBackend = async (taskId: number): Promise<BackendTas
   try {
     return JSON.parse(responseText);
   } catch (e) {
-    logger.error(`[getTaskByIdFromBackend] JSON parse error for task ${taskId}:`, e);
+    // logger.error(`[getTaskByIdFromBackend] JSON parse error for task ${taskId}:`, e);
     return null;
   }
 };
