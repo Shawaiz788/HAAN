@@ -76,13 +76,7 @@ function SkeletonBox({
     );
 }
 
-function showToast(message: string) {
-    if (Platform.OS === 'android') {
-        ToastAndroid.show(message, ToastAndroid.SHORT);
-    } else {
-        Alert.alert('Bid Placed', message);
-    }
-}
+
 
 export default function JobCard({ job, onPress, onQuickBid, activeBid, hasActiveTask }: JobCardProps) {
     const progressAnim = useRef(new Animated.Value(1)).current;
@@ -142,7 +136,6 @@ export default function JobCard({ job, onPress, onQuickBid, activeBid, hasActive
         }
         if (isWaiting) return;
         onQuickBid(job, amount);
-        showToast(`You have successfully placed a bid of Rs.${amount.toLocaleString()}.`);
     };
 
     // Resolve category icon + colour from the LiveJob fields (set by store) or fall back to name-based mapping

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Modal,
     View,
@@ -16,6 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 import { LiveJob } from '@/hooks/useProWebSocket';
+import { CustomerProfile } from '@/types';
+import { getCustomerProfile, normalizeImageUrl } from '@/services/customer';
+import { SkeletonBox } from '@/components/pro/jobDetailBottomSheet/SkeletonBox';
 import UserReviewsModal from '@/components/UserReviewsModal';
 import { TaskChatModal } from '../common/TaskChatModal';
 import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/store/paymentStore';
@@ -49,14 +52,59 @@ export default function ProActiveTaskModal({
     const [customerReviewsVisible, setCustomerReviewsVisible] = useState(false);
     const [chatVisible, setChatVisible] = useState(false);
 
+    const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+    const [profileError, setProfileError] = useState(false);
+    const [fetchedProfile, setFetchedProfile] = useState<CustomerProfile | null>(null);
+
+    const loadCustomerProfile = useCallback(async () => {
+        if (!job?.customer_id) {
+            setIsLoadingProfile(false);
+            return;
+        }
+        setIsLoadingProfile(true);
+        setProfileError(false);
+        try {
+            const profileData = await getCustomerProfile(Number(job.customer_id));
+            setFetchedProfile(profileData);
+            setIsLoadingProfile(false);
+        } catch (err) {
+            console.warn('[ProActiveTaskModal] Error loading customer profile:', err);
+            setProfileError(true);
+            setIsLoadingProfile(false);
+        }
+    }, [job?.customer_id]);
+
+    useEffect(() => {
+        if (isVisible && job) {
+            if (job.customer_profile) {
+                setFetchedProfile(job.customer_profile);
+                setIsLoadingProfile(false);
+                setProfileError(false);
+            } else if (job.customer_id && (!job.customer_name || job.customer_name === 'Customer')) {
+                loadCustomerProfile();
+            } else {
+                setIsLoadingProfile(false);
+                setProfileError(false);
+            }
+        }
+    }, [isVisible, job, loadCustomerProfile]);
+
     if (!job || !isVisible) return null;
 
-    const rawPhone = job.customer_profile?.phone_number || '';
+    const activeProfile = fetchedProfile || job.customer_profile;
+    const fullName = activeProfile
+        ? [activeProfile.first_name, activeProfile.last_name].filter(Boolean).join(' ').trim()
+        : '';
+    const customerName = fullName || job.customer_name || 'Customer';
+    const rawImage = activeProfile?.image || job.customer_image;
+    const customerAvatar = normalizeImageUrl(rawImage);
+    const customerRating = activeProfile?.overall_rating ?? job.customer_rating ?? 4.8;
+    const rawPhone = activeProfile?.phone_number || job.customer_profile?.phone_number || '';
     const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
 
     const handleWhatsApp = () => {
         const targetPhone = cleanPhone.length >= 7 ? cleanPhone : '923001234567';
-        const textMessage = `Hi ${job.customer_name}, I am your service provider from KaamKarwao for task #${job.id} ("${job.title}").`;
+        const textMessage = `Hi ${customerName}, I am your service provider from KaamKarwao for task #${job.id} ("${job.title}").`;
         const whatsappUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(textMessage)}`;
 
         console.log('[ProActiveTaskModal] Opening WhatsApp URL:', whatsappUrl);
@@ -144,62 +192,129 @@ export default function ProActiveTaskModal({
                     {/* Customer Profile Card */}
                     <View style={styles.customerCard}>
                         <Text style={styles.sectionHeading}>Customer Details</Text>
-                        <Pressable
-                            style={styles.customerRow}
-                            onPress={() => {
-                                if (job.customer_id) {
-                                    setCustomerReviewsVisible(true);
-                                }
-                            }}
-                        >
-                            {job.customer_image ? (
-                                <Image source={{ uri: job.customer_image }} style={styles.customerAvatar} />
-                            ) : (
-                                <View style={styles.customerAvatarPlaceholder}>
-                                    <Text style={styles.avatarInitials}>
-                                        {job.customer_name
-                                            ? job.customer_name.slice(0, 2).toUpperCase()
-                                            : 'CU'}
-                                    </Text>
-                                </View>
-                            )}
 
-                            <View style={styles.customerInfo}>
-                                <Text style={styles.customerName}>{job.customer_name}</Text>
-                                <View style={styles.ratingRow}>
-                                    <Ionicons name="star" size={15} color="#F59E0B" />
-                                    <Text style={styles.ratingText}>
-                                        {job.customer_rating ? job.customer_rating.toFixed(1) : '4.8'} Customer Rating
-                                    </Text>
+                        {isLoadingProfile ? (
+                            <View style={styles.skeletonContainer}>
+                                <View style={styles.customerRow}>
+                                    <SkeletonBox
+                                        width={52}
+                                        height={52}
+                                        borderRadius={26}
+                                        backgroundColor="rgba(255,255,255,0.12)"
+                                    />
+                                    <View style={{ flex: 1, gap: 8 }}>
+                                        <SkeletonBox
+                                            width={140}
+                                            height={16}
+                                            borderRadius={4}
+                                            backgroundColor="rgba(255,255,255,0.12)"
+                                        />
+                                        <SkeletonBox
+                                            width={100}
+                                            height={14}
+                                            borderRadius={4}
+                                            backgroundColor="rgba(255,255,255,0.12)"
+                                        />
+                                        <SkeletonBox
+                                            width={160}
+                                            height={12}
+                                            borderRadius={4}
+                                            backgroundColor="rgba(255,255,255,0.12)"
+                                        />
+                                    </View>
                                 </View>
-                                <Text style={styles.tapToViewReviewsHint}>Tap profile to see reviews</Text>
-                                <View style={styles.locationRow}>
-                                    <Ionicons name="location-outline" size={14} color={Colors.neutral[400]} />
-                                    <Text style={styles.locationText} numberOfLines={2}>
-                                        {job.location_name}
-                                    </Text>
-                                </View>
+                                {!isCancelled && (
+                                    <View style={styles.contactButtonsRow}>
+                                        <SkeletonBox
+                                            width="31%"
+                                            height={42}
+                                            borderRadius={10}
+                                            backgroundColor="rgba(255,255,255,0.12)"
+                                        />
+                                        <SkeletonBox
+                                            width="31%"
+                                            height={42}
+                                            borderRadius={10}
+                                            backgroundColor="rgba(255,255,255,0.12)"
+                                        />
+                                        <SkeletonBox
+                                            width="31%"
+                                            height={42}
+                                            borderRadius={10}
+                                            backgroundColor="rgba(255,255,255,0.12)"
+                                        />
+                                    </View>
+                                )}
                             </View>
-                        </Pressable>
-
-                        {/* Direct Contact Buttons (Only active when NOT cancelled) */}
-                        {!isCancelled && (
-                            <View style={styles.contactButtonsRow}>
-                                <Pressable style={[styles.contactBtn, styles.chatBtn]} onPress={() => setChatVisible(true)}>
-                                    <Ionicons name="chatbubble-ellipses" size={18} color={Colors.white} />
-                                    <Text style={styles.contactBtnText} numberOfLines={1}>In-App Chat</Text>
-                                </Pressable>
-
-                                <Pressable style={[styles.contactBtn, styles.whatsappBtn]} onPress={handleWhatsApp}>
-                                    <Ionicons name="logo-whatsapp" size={18} color={Colors.white} />
-                                    <Text style={styles.contactBtnText} numberOfLines={1}>WhatsApp</Text>
-                                </Pressable>
-
-                                <Pressable style={[styles.contactBtn, styles.callBtn]} onPress={handleCall}>
-                                    <Ionicons name="call" size={18} color={Colors.white} />
-                                    <Text style={styles.contactBtnText} numberOfLines={1}>Call</Text>
+                        ) : profileError ? (
+                            <View style={styles.errorContainer}>
+                                <View style={styles.errorRow}>
+                                    <Ionicons name="alert-circle-outline" size={24} color="#F59E0B" />
+                                    <Text style={styles.errorText}>Failed to load customer profile.</Text>
+                                </View>
+                                <Pressable style={styles.retryBtn} onPress={loadCustomerProfile}>
+                                    <Ionicons name="refresh-outline" size={16} color={Colors.white} />
+                                    <Text style={styles.retryBtnText}>Retry Loading Profile</Text>
                                 </Pressable>
                             </View>
+                        ) : (
+                            <>
+                                <Pressable
+                                    style={styles.customerRow}
+                                    onPress={() => {
+                                        if (job.customer_id) {
+                                            setCustomerReviewsVisible(true);
+                                        }
+                                    }}
+                                >
+                                    {customerAvatar ? (
+                                        <Image source={{ uri: customerAvatar }} style={styles.customerAvatar} />
+                                    ) : (
+                                        <View style={styles.customerAvatarPlaceholder}>
+                                            <Text style={styles.avatarInitials}>
+                                                {customerName ? customerName.slice(0, 2).toUpperCase() : 'CU'}
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    <View style={styles.customerInfo}>
+                                        <Text style={styles.customerName}>{customerName}</Text>
+                                        <View style={styles.ratingRow}>
+                                            <Ionicons name="star" size={15} color="#F59E0B" />
+                                            <Text style={styles.ratingText}>
+                                                {customerRating ? Number(customerRating).toFixed(1) : '4.8'} Customer Rating
+                                            </Text>
+                                        </View>
+                                        <Text style={styles.tapToViewReviewsHint}>Tap profile to see reviews</Text>
+                                        <View style={styles.locationRow}>
+                                            <Ionicons name="location-outline" size={14} color={Colors.neutral[400]} />
+                                            <Text style={styles.locationText} numberOfLines={2}>
+                                                {job.location_name || 'Location details unavailable'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </Pressable>
+
+                                {/* Direct Contact Buttons (Only active when NOT cancelled) */}
+                                {!isCancelled && (
+                                    <View style={styles.contactButtonsRow}>
+                                        <Pressable style={[styles.contactBtn, styles.chatBtn]} onPress={() => setChatVisible(true)}>
+                                            <Ionicons name="chatbubble-ellipses" size={18} color={Colors.white} />
+                                            <Text style={styles.contactBtnText} numberOfLines={1}>In-App Chat</Text>
+                                        </Pressable>
+
+                                        <Pressable style={[styles.contactBtn, styles.whatsappBtn]} onPress={handleWhatsApp}>
+                                            <Ionicons name="logo-whatsapp" size={18} color={Colors.white} />
+                                            <Text style={styles.contactBtnText} numberOfLines={1}>WhatsApp</Text>
+                                        </Pressable>
+
+                                        <Pressable style={[styles.contactBtn, styles.callBtn]} onPress={handleCall}>
+                                            <Ionicons name="call" size={18} color={Colors.white} />
+                                            <Text style={styles.contactBtnText} numberOfLines={1}>Call</Text>
+                                        </Pressable>
+                                    </View>
+                                )}
+                            </>
                         )}
                     </View>
 

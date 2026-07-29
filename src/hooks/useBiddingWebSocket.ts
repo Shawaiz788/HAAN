@@ -56,78 +56,7 @@ export interface UseBiddingWebSocketResult {
     closeSocket: () => void;
 }
 
-export async function sendQuickBidViaWebSocket(
-    taskId: number | string,
-    userId: number | string,
-    price: number,
-    estimatedHours: number = 1
-): Promise<void> {
-    return new Promise((resolve, reject) => {
-        let isSettled = false;
-        let ws: WebSocket | null = null;
-
-        const cleanup = () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            if (ws) {
-                ws.onopen = null;
-                ws.onmessage = null;
-                ws.onerror = null;
-                ws.onclose = null;
-                try { ws.close(1000); } catch (e) {}
-                ws = null;
-            }
-        };
-
-        const timeoutId = setTimeout(() => {
-            if (!isSettled) {
-                logger.warn('[sendQuickBidViaWebSocket] Timeout waiting for bid confirmation.');
-                isSettled = true;
-                cleanup();
-                reject(new Error('Response timeout from server.'));
-            }
-        }, 6000);
-
-        try {
-            const url = `${WS_BASE}/ws/bidding/${taskId}/`;
-            logger.log('[sendQuickBidViaWebSocket] Opening quick socket connection to:', url);
-            ws = new WebSocket(url);
-
-            ws.onopen = () => {
-                const payload = { type: 'place_bid', user_id: userId, price, estimated_hours: estimatedHours };
-                logger.log('[sendQuickBidViaWebSocket] Sending payload:', payload);
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify(payload));
-                }
-            };
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    logger.log('[sendQuickBidViaWebSocket] Received message:', data);
-                    if (data.type === 'bid_placed' && String(data.bid?.user_id) === String(userId)) {
-                        if (!isSettled) { isSettled = true; cleanup(); resolve(); }
-                    } else if (data.type === 'bidding_closed') {
-                        if (!isSettled) { isSettled = true; cleanup(); reject(new Error('Bidding is closed for this task.')); }
-                    }
-                } catch (e) {
-                    logger.warn('[sendQuickBidViaWebSocket] Error parsing response message:', e);
-                }
-            };
-
-            ws.onerror = (err) => {
-                logger.error('[sendQuickBidViaWebSocket] Quick bid socket error:', err);
-                if (!isSettled) { isSettled = true; cleanup(); reject(err); }
-            };
-
-            ws.onclose = (event) => {
-                logger.log(`[sendQuickBidViaWebSocket] Quick bid socket closed. Code: ${event.code}`);
-                if (!isSettled) { isSettled = true; cleanup(); reject(new Error(`Connection closed. Code: ${event.code}`)); }
-            };
-        } catch (e) {
-            if (!isSettled) { isSettled = true; cleanup(); reject(e); }
-        }
-    });
-}
+export { sendQuickBidViaWebSocket } from '@/services/quickBid';
 
 const MAX_RETRY_DELAY_MS = 30_000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
@@ -164,6 +93,9 @@ export function useBiddingWebSocket({
     const isMountedRef = useRef(true);
     const shouldConnectRef = useRef(false);
     const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+    const pendingBidRef = useRef<{ payload: any } | null>(null);
+    const pendingAcceptRef = useRef<{ payload: any } | null>(null);
 
     const isCustomerRef = useRef(isCustomer);
     isCustomerRef.current = isCustomer;
@@ -232,6 +164,8 @@ export function useBiddingWebSocket({
     const closeSocket = useCallback(() => {
         clearWatchdogTimer();
         clearRetryTimer();
+        pendingBidRef.current = null;
+        pendingAcceptRef.current = null;
         if (wsRef.current) {
             wsRef.current.onclose = null;
             wsRef.current.onerror = null;
@@ -281,6 +215,24 @@ export function useBiddingWebSocket({
                 logger.log(`[useBiddingWebSocket] Connected to bidding room for task ${taskId}`);
                 setWsStatus('connected');
                 retryDelayRef.current = INITIAL_RETRY_DELAY_MS;
+
+                if (pendingBidRef.current) {
+                    logger.log('[useBiddingWebSocket] Connected! Transmitting queued pending bid:', pendingBidRef.current.payload);
+                    try {
+                        ws.send(JSON.stringify(pendingBidRef.current.payload));
+                    } catch (err) {
+                        logger.error('[useBiddingWebSocket] Failed to transmit queued bid:', err);
+                    }
+                }
+
+                if (pendingAcceptRef.current) {
+                    logger.log('[useBiddingWebSocket] Connected! Transmitting queued accept_bid:', pendingAcceptRef.current.payload);
+                    try {
+                        ws.send(JSON.stringify(pendingAcceptRef.current.payload));
+                    } catch (err) {
+                        logger.error('[useBiddingWebSocket] Failed to transmit queued accept:', err);
+                    }
+                }
             };
 
             ws.onmessage = async (event) => {
@@ -291,6 +243,8 @@ export function useBiddingWebSocket({
 
                     switch (data.type) {
                         case 'bidding_closed': {
+                            pendingBidRef.current = null;
+                            pendingAcceptRef.current = null;
                             setIsBiddingClosed(true);
                             if (!isCustomerRef.current) {
                                 showFeedback('This task has already been assigned.');
@@ -311,6 +265,9 @@ export function useBiddingWebSocket({
                         case 'bid_placed': {
                             if (data.bid) {
                                 const newBid: BidsWSBid = { ...data.bid, is_profile_loading: true };
+                                if (String(newBid.user_id) === String(userIdRef.current)) {
+                                    pendingBidRef.current = null;
+                                }
                                 setBids((prev) => {
                                     if (prev.some((b) => String(b.id) === String(newBid.id))) {
                                         return prev;
@@ -326,6 +283,7 @@ export function useBiddingWebSocket({
                             const accepted = data.bid;
                             if (!accepted) break;
 
+                            pendingAcceptRef.current = null;
                             setWinningBid(accepted);
                             setIsBiddingClosed(true);
                             onBidAcceptedRef.current?.(accepted);
@@ -391,12 +349,6 @@ export function useBiddingWebSocket({
 
     const placeBid = useCallback(
         (price: number, estimatedHours: number = 1) => {
-            if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-                logger.warn('[useBiddingWebSocket] Cannot place bid: WebSocket is not open.');
-                showFeedback('Connection error. Please wait until connected to place a bid.');
-                return;
-            }
-
             const payload = {
                 type: 'place_bid',
                 user_id: userId,
@@ -404,27 +356,50 @@ export function useBiddingWebSocket({
                 estimated_hours: estimatedHours,
             };
 
-            logger.log('[useBiddingWebSocket] Sending place_bid payload:', payload);
-            wsRef.current.send(JSON.stringify(payload));
+            pendingBidRef.current = { payload };
+
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                logger.log('[useBiddingWebSocket] Transmitting place_bid payload:', payload);
+                try {
+                    wsRef.current.send(JSON.stringify(payload));
+                } catch (err) {
+                    logger.warn('[useBiddingWebSocket] Error sending place_bid payload immediately:', err);
+                }
+            } else {
+                logger.log('[useBiddingWebSocket] Socket not connected yet. Bid queued for transmission upon connection:', payload);
+                if (shouldConnectRef.current && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
+                    connect();
+                }
+            }
         },
-        [userId]
+        [userId, connect]
     );
 
-    const acceptBid = useCallback((bidId: number | string) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-            logger.warn('[useBiddingWebSocket] Cannot accept bid: WebSocket is not open.');
-            showFeedback('Connection error. Please wait until connected to accept a bid.');
-            return;
-        }
+    const acceptBid = useCallback(
+        (bidId: number | string) => {
+            const payload = {
+                type: 'accept_bid',
+                bid_id: bidId,
+            };
 
-        const payload = {
-            type: 'accept_bid',
-            bid_id: bidId,
-        };
+            pendingAcceptRef.current = { payload };
 
-        logger.log('[useBiddingWebSocket] Sending accept_bid payload:', payload);
-        wsRef.current.send(JSON.stringify(payload));
-    }, []);
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                logger.log('[useBiddingWebSocket] Transmitting accept_bid payload:', payload);
+                try {
+                    wsRef.current.send(JSON.stringify(payload));
+                } catch (err) {
+                    logger.warn('[useBiddingWebSocket] Error sending accept_bid payload immediately:', err);
+                }
+            } else {
+                logger.log('[useBiddingWebSocket] Socket not connected yet. Accept action queued:', payload);
+                if (shouldConnectRef.current && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
+                    connect();
+                }
+            }
+        },
+        [connect]
+    );
 
     useEffect(() => {
         shouldConnectRef.current = enabled && isFocused && Boolean(taskId) && Boolean(userId);
@@ -482,3 +457,4 @@ export function useBiddingWebSocket({
         closeSocket,
     };
 }
+

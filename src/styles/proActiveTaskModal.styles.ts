@@ -294,4 +294,35 @@ export const styles = StyleSheet.create({
         marginTop: 2,
         marginBottom: 6,
     },
+    skeletonContainer: {
+        gap: 12,
+    },
+    errorContainer: {
+        alignItems: 'center',
+        paddingVertical: 12,
+        gap: 10,
+    },
+    errorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    errorText: {
+        color: Colors.neutral[300],
+        fontSize: 13,
+    },
+    retryBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: Colors.pro.accentDim,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    retryBtnText: {
+        color: Colors.white,
+        fontSize: 13,
+        fontWeight: '600',
+    },
 });

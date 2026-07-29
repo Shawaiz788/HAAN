@@ -5,6 +5,7 @@ interface SkeletonBoxProps {
     width: number | string;
     height: number;
     borderRadius?: number;
+    backgroundColor?: string;
     style?: StyleProp<ViewStyle>;
 }
 
@@ -12,6 +13,7 @@ export const SkeletonBox: React.FC<SkeletonBoxProps> = ({
     width,
     height,
     borderRadius = 4,
+    backgroundColor = '#E2E8F0',
     style,
 }) => {
     const anim = useRef(new Animated.Value(0.3)).current;
@@ -30,7 +32,7 @@ export const SkeletonBox: React.FC<SkeletonBoxProps> = ({
     return (
         <Animated.View
             style={[
-                { width: width as any, height, borderRadius, backgroundColor: '#E2E8F0', opacity: anim },
+                { width: width as any, height, borderRadius, backgroundColor, opacity: anim },
                 style,
             ]}
         />

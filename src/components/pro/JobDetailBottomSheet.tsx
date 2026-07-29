@@ -311,9 +311,6 @@ export default function JobDetailBottomSheet({
         }
 
         wsPlaceBid(computedBidAmount, 1);
-        if (Platform.OS === 'android') {
-            ToastAndroid.show(`Placed bid of Rs.${computedBidAmount.toLocaleString()}`, ToastAndroid.SHORT);
-        }
         Keyboard.dismiss();
         if (onPlaceBid) {
             onPlaceBid(job, computedBidAmount);
