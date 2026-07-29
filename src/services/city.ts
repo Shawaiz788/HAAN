@@ -15,13 +15,13 @@ export const getCities = async (forceRefresh: boolean = false): Promise<City[]> 
 
   // If cached cities exist and cache is fresh, return immediately (0ms delay)
   if (cached.length > 0 && !forceRefresh && !isGeoCacheStale()) {
-    logger.log(`[city API] ⚡ Returning ${cached.length} cities instantly from MMKV cache`);
+    // logger.log(`[city API] ⚡ Returning ${cached.length} cities instantly from MMKV cache`);
     return cached;
   }
 
   // If cached cities exist but stale, trigger non-blocking background sync
   if (cached.length > 0 && !forceRefresh) {
-    logger.log(`[city API] ⚡ Returning ${cached.length} cached cities & triggering background sync`);
+    //logger.log(`[city API] ⚡ Returning ${cached.length} cached cities & triggering background sync`);
     fetchCitiesFromApiAndCache().catch((err) =>
       logger.warn('[city API] Background city sync warning:', err)
     );

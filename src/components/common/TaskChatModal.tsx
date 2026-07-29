@@ -20,6 +20,8 @@ import { useAuth } from '@/context/auth';
 import { useTaskChatWebSocket } from '../../hooks/useTaskChatWebSocket';
 import { Colors } from '@/constants/colors';
 import { SkeletonBox } from '@/components/pro/jobDetailBottomSheet/SkeletonBox';
+import { AgoraVoipCallModal } from './AgoraVoipCallModal';
+import { IncomingCallModal, IncomingCallData } from './IncomingCallModal';
 
 export interface TaskChatModalProps {
   visible: boolean;
@@ -45,6 +47,9 @@ export function TaskChatModal({
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [inputText, setInputText] = useState('');
+  const [voipModalVisible, setVoipModalVisible] = useState(false);
+  const [voipCallStatus, setVoipCallStatus] = useState<'calling' | 'connected'>('calling');
+  const [incomingCallData, setIncomingCallData] = useState<IncomingCallData | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
 
@@ -56,14 +61,60 @@ export function TaskChatModal({
     hasMoreOlderMessages,
     isLoadingOlder,
     sendMessage,
+    sendCallSignal,
     loadOlderMessages,
     reconnect,
   } = useTaskChatWebSocket({
     taskId,
     userId: user?.id,
     token: user?.token,
-    enabled: visible && Boolean(taskId),
+    enabled: Boolean(taskId),
+    onIncomingCallSignal: (data) => {
+      if (data.signal === 'incoming_call') {
+        setIncomingCallData({
+          taskId: data.taskId,
+          callerName: data.callerName,
+          callerAvatar: data.callerAvatar,
+        });
+      } else if (data.signal === 'call_declined' || data.signal === 'call_ended') {
+        setIncomingCallData(null);
+        setVoipModalVisible(false);
+      } else if (data.signal === 'call_accepted') {
+        setIncomingCallData(null);
+        setVoipCallStatus('connected');
+        setVoipModalVisible(true);
+      }
+    },
   });
+
+  const handleInitiateCall = () => {
+    setVoipCallStatus('calling');
+    sendCallSignal('incoming_call', {
+      caller_name: user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'User',
+      caller_avatar: (user as any)?.avatar || (user as any)?.image || '',
+    });
+    if (onCall) {
+      onCall();
+    } else {
+      setVoipModalVisible(true);
+    }
+  };
+
+  const handleAcceptIncoming = () => {
+    sendCallSignal('call_accepted');
+    setIncomingCallData(null);
+    setVoipCallStatus('connected');
+    setVoipModalVisible(true);
+  };
+
+  const handleDeclineIncoming = () => {
+    sendCallSignal('call_declined');
+    setIncomingCallData(null);
+  };
+
+  const handleEndCallSignal = () => {
+    sendCallSignal('call_ended');
+  };
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -169,11 +220,9 @@ export function TaskChatModal({
             </>
           )}
 
-          {onCall && (
-            <Pressable onPress={onCall} style={styles.headerCallBtn} hitSlop={10}>
-              <Ionicons name="call" size={20} color="#FFFFFF" />
-            </Pressable>
-          )}
+          <Pressable onPress={handleInitiateCall} style={styles.headerCallBtn} hitSlop={10}>
+            <Ionicons name="call" size={20} color="#FFFFFF" />
+          </Pressable>
         </View>
 
         {/* Chat Body Error Banner */}
@@ -281,6 +330,26 @@ export function TaskChatModal({
             <Ionicons name="send" size={18} color="#FFFFFF" />
           </Pressable>
         </View>
+
+        {/* In-App Voice Call Modal */}
+        <AgoraVoipCallModal
+          visible={voipModalVisible}
+          onClose={() => setVoipModalVisible(false)}
+          taskId={taskId}
+          otherUserName={otherUserName}
+          otherUserAvatar={otherUserAvatar}
+          role={role}
+          initialStatus={voipCallStatus}
+          onEndCallSignal={handleEndCallSignal}
+        />
+
+        {/* Incoming Call Ringing Modal */}
+        <IncomingCallModal
+          visible={Boolean(incomingCallData)}
+          callData={incomingCallData}
+          onAccept={handleAcceptIncoming}
+          onDecline={handleDeclineIncoming}
+        />
       </Animated.View>
     </Modal>
   );

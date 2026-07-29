@@ -25,6 +25,7 @@ import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/store/payme
 import { styles } from '@/styles/proActiveTaskModal.styles';
 
 import useProTaskStore from '@/store/proTaskStore';
+import { AgoraVoipCallModal } from '../common/AgoraVoipCallModal';
 
 interface ProActiveTaskModalProps {
     job: LiveJob | null;
@@ -53,10 +54,15 @@ export default function ProActiveTaskModal({
     const [isCompleting, setIsCompleting] = useState(false);
     const [customerReviewsVisible, setCustomerReviewsVisible] = useState(false);
     const [chatVisible, setChatVisible] = useState(false);
+    const [voipModalVisible, setVoipModalVisible] = useState(false);
 
     const [isLoadingProfile, setIsLoadingProfile] = useState(false);
     const [profileError, setProfileError] = useState(false);
     const [fetchedProfile, setFetchedProfile] = useState<CustomerProfile | null>(null);
+
+    const handleCall = () => {
+        setVoipModalVisible(true);
+    };
 
     const loadCustomerProfile = useCallback(async () => {
         if (!job?.customer_id) {
@@ -137,16 +143,6 @@ export default function ProActiveTaskModal({
                 'WhatsApp Error',
                 'Could not open WhatsApp. Please ensure WhatsApp is installed on your device.'
             );
-        });
-    };
-
-    const handleCall = () => {
-        const targetPhone = cleanPhone.length >= 7 ? cleanPhone : '923001234567';
-        const telUrl = `tel:${targetPhone}`;
-
-        console.log('[ProActiveTaskModal] Opening Tel URL:', telUrl);
-        Linking.openURL(telUrl).catch(() => {
-            Alert.alert('Phone Call Error', 'Could not open phone dialer.');
         });
     };
 
@@ -431,6 +427,16 @@ export default function ProActiveTaskModal({
                 userId={job.customer_id}
                 userName={customerName}
                 role="customer"
+            />
+
+            {/* Reusable In-App Agora Voice Call Modal */}
+            <AgoraVoipCallModal
+                visible={voipModalVisible}
+                onClose={() => setVoipModalVisible(false)}
+                taskId={job.id}
+                otherUserName={customerName}
+                otherUserAvatar={customerAvatar}
+                role="pro"
             />
         </Modal>
     );

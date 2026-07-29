@@ -18,6 +18,7 @@ export interface UseTaskChatWebSocketOptions {
   userId: number | string | undefined | null;
   token?: string;
   enabled?: boolean;
+  onIncomingCallSignal?: (callData: { taskId: number | string; callerName: string; callerAvatar?: string; signal: string }) => void;
 }
 
 export interface UseTaskChatWebSocketResult {
@@ -28,6 +29,7 @@ export interface UseTaskChatWebSocketResult {
   hasMoreOlderMessages: boolean;
   isLoadingOlder: boolean;
   sendMessage: (body: string, replyToId?: number | string | null) => void;
+  sendCallSignal: (signal: 'incoming_call' | 'call_accepted' | 'call_declined' | 'call_ended', payload?: any) => void;
   loadOlderMessages: () => Promise<void>;
   reconnect: () => void;
 }
@@ -37,6 +39,7 @@ export function useTaskChatWebSocket({
   userId,
   token,
   enabled = true,
+  onIncomingCallSignal,
 }: UseTaskChatWebSocketOptions): UseTaskChatWebSocketResult {
   const isFocused = useIsFocused();
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
@@ -47,6 +50,31 @@ export function useTaskChatWebSocket({
   const [isLoadingOlder, setIsLoadingOlder] = useState<boolean>(false);
 
   const socketRef = useRef<WebSocket | null>(null);
+  const onIncomingCallSignalRef = useRef(onIncomingCallSignal);
+  useEffect(() => {
+    onIncomingCallSignalRef.current = onIncomingCallSignal;
+  }, [onIncomingCallSignal]);
+
+  const sendCallSignal = useCallback((signal: 'incoming_call' | 'call_accepted' | 'call_declined' | 'call_ended', extraPayload?: any) => {
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
+    try {
+      const callerName = extraPayload?.caller_name || 'User';
+      socketRef.current.send(JSON.stringify({
+        type: 'send_message',
+        body: `[VOICE_CALL_SIGNAL:${signal}:${callerName}]`,
+        reply_to: null,
+      }));
+      socketRef.current.send(JSON.stringify({
+        type: 'voice_call_signal',
+        signal,
+        task_id: taskId,
+        sender_id: userId,
+        ...extraPayload,
+      }));
+    } catch (e) {
+      logger.warn('[useTaskChatWS] Failed to send call signal:', e);
+    }
+  }, [taskId, userId]);
   const isComponentMounted = useRef<boolean>(true);
   const hasCheckedStatusRef = useRef<boolean>(false);
 
@@ -70,7 +98,7 @@ export function useTaskChatWebSocket({
   };
 
   const connect = useCallback(async () => {
-    if (!taskId || !enabled || !isFocused) return;
+    if (!taskId || !enabled) return;
 
     // Reset state
     setChatError(null);
@@ -127,8 +155,9 @@ export function useTaskChatWebSocket({
           switch (data.type) {
             case 'message_history':
               if (Array.isArray(data.messages)) {
-                setMessages(data.messages);
-                if (data.messages.length < 20) {
+                const filteredHistory = data.messages.filter((m: any) => !m.body?.startsWith('[VOICE_CALL_SIGNAL:'));
+                setMessages(filteredHistory);
+                if (filteredHistory.length < 20) {
                   setHasMoreOlderMessages(false);
                 }
               }
@@ -136,7 +165,35 @@ export function useTaskChatWebSocket({
 
             case 'message_received':
               if (data.message) {
-                setMessages((prev) => appendDeduplicated(prev, data.message));
+                const bodyStr = data.message.body || '';
+                if (bodyStr.startsWith('[VOICE_CALL_SIGNAL:')) {
+                  const content = bodyStr.substring(19, bodyStr.length - 1);
+                  const parts = content.split(':');
+                  const sig = parts[0] || 'incoming_call';
+                  const caller = parts[1] || 'Caller';
+                  const senderId = data.message.sender_id || data.message.sender;
+                  if (senderId && String(senderId) !== String(userId)) {
+                    onIncomingCallSignalRef.current?.({
+                      taskId: taskId,
+                      callerName: caller,
+                      callerAvatar: '',
+                      signal: sig,
+                    });
+                  }
+                } else {
+                  setMessages((prev) => appendDeduplicated(prev, data.message));
+                }
+              }
+              break;
+
+            case 'voice_call_signal':
+              if (data.sender_id && String(data.sender_id) !== String(userId)) {
+                onIncomingCallSignalRef.current?.({
+                  taskId: data.task_id || taskId,
+                  callerName: data.caller_name || 'Caller',
+                  callerAvatar: data.caller_avatar || '',
+                  signal: data.signal,
+                });
               }
               break;
 
@@ -186,11 +243,11 @@ export function useTaskChatWebSocket({
 
   useEffect(() => {
     isComponentMounted.current = true;
-    if (enabled && isFocused && taskId) {
+    if (enabled && taskId) {
       connect();
     } else {
       if (socketRef.current) {
-        logger.log('[useTaskChatWS] Closing chat socket as screen is unfocused or disabled');
+        logger.log('[useTaskChatWS] Closing chat socket as screen is disabled');
         socketRef.current.onclose = null;
         socketRef.current.onerror = null;
         socketRef.current.onmessage = null;
@@ -211,7 +268,7 @@ export function useTaskChatWebSocket({
         socketRef.current = null;
       }
     };
-  }, [connect, enabled, isFocused, taskId]);
+  }, [connect, enabled, taskId]);
 
   // Step 6: Send a message
   const sendMessage = useCallback(
@@ -276,6 +333,7 @@ export function useTaskChatWebSocket({
     hasMoreOlderMessages,
     isLoadingOlder,
     sendMessage,
+    sendCallSignal,
     loadOlderMessages,
     reconnect: forceReconnect,
   };

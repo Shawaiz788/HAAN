@@ -46,7 +46,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
                 projectId ? { projectId } : undefined
             );
             pushToken = tokenData.data;
-            logger.log('[notificationService] Device Expo Push Token:', pushToken);
+            // logger.log('[notificationService] Device Expo Push Token:', pushToken);
         } catch (tokenErr) {
             logger.warn('[notificationService] Unable to fetch Expo Push Token:', tokenErr);
         }
@@ -82,7 +82,7 @@ export async function showNewTaskNotification(task: {
             },
             trigger: null, // Display immediately
         });
-        logger.log(`[notificationService] Triggered push notification for task ${task.id}`);
+        // logger.log(`[notificationService] Triggered push notification for task ${task.id}`);
     } catch (e) {
         logger.warn('[notificationService] Error showing task notification:', e);
     }
