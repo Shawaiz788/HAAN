@@ -167,22 +167,28 @@ export function useBiddingWebSocket({
         pendingBidRef.current = null;
         pendingAcceptRef.current = null;
         if (wsRef.current) {
-            wsRef.current.onclose = null;
-            wsRef.current.onerror = null;
-            wsRef.current.onmessage = null;
+            const socketToClose = wsRef.current;
+            wsRef.current = null;
+            socketToClose.onopen = null;
+            socketToClose.onclose = null;
+            socketToClose.onerror = null;
+            socketToClose.onmessage = null;
             try {
-                wsRef.current.close(1000, 'Intentional close');
+                if (socketToClose.readyState === WebSocket.OPEN || socketToClose.readyState === WebSocket.CONNECTING) {
+                    socketToClose.close(1000, 'Intentional close');
+                }
             } catch (e) {
                 // Ignore socket close errors
             }
-            wsRef.current = null;
         }
         setWsStatus('disconnected');
     }, []);
 
     const connect = useCallback(() => {
         if (!isMountedRef.current || !taskId || !userId || !shouldConnectRef.current) return;
-        if (wsRef.current) return;
+        if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
+
+        closeSocket();
 
         const url = `${WS_BASE}/ws/bidding/${taskId}/`;
         logger.log('[useBiddingWebSocket] Connecting to:', url);
@@ -191,26 +197,20 @@ export function useBiddingWebSocket({
         clearWatchdogTimer();
         watchdogTimerRef.current = setTimeout(() => {
             if (!isMountedRef.current || !shouldConnectRef.current) return;
-            if (wsRef.current && wsRef.current.readyState !== WebSocket.OPEN) {
-                logger.warn(`[useBiddingWebSocket] Connection timed out after 2000ms for task ${taskId}. Re-establishing socket...`);
-                if (wsRef.current) {
-                    wsRef.current.onclose = null;
-                    wsRef.current.onerror = null;
-                    wsRef.current.onmessage = null;
-                    try { wsRef.current.close(); } catch (e) { }
-                    wsRef.current = null;
-                }
+            if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
+                logger.warn(`[useBiddingWebSocket] Connection timed out after 10000ms for task ${taskId}. Re-establishing socket...`);
+                closeSocket();
                 setWsStatus('reconnecting');
                 connect();
             }
-        }, 2000);
+        }, 10000);
 
         try {
             const ws = new WebSocket(url);
             wsRef.current = ws;
 
             ws.onopen = () => {
-                if (!isMountedRef.current) return;
+                if (!isMountedRef.current || ws !== wsRef.current) return;
                 clearWatchdogTimer();
                 logger.log(`[useBiddingWebSocket] Connected to bidding room for task ${taskId}`);
                 setWsStatus('connected');
@@ -236,7 +236,7 @@ export function useBiddingWebSocket({
             };
 
             ws.onmessage = async (event) => {
-                if (!isMountedRef.current) return;
+                if (!isMountedRef.current || ws !== wsRef.current) return;
                 try {
                     const data: BidsWSMessage = JSON.parse(event.data);
                     logger.log('[useBiddingWebSocket] Message received:', data);
@@ -316,11 +316,12 @@ export function useBiddingWebSocket({
             };
 
             ws.onerror = (error) => {
+                if (!isMountedRef.current || ws !== wsRef.current) return;
                 logger.error(`[useBiddingWebSocket] WebSocket error for task ${taskId}:`, error);
             };
 
             ws.onclose = (event) => {
-                if (!isMountedRef.current) return;
+                if (!isMountedRef.current || ws !== wsRef.current) return;
                 wsRef.current = null;
                 logger.log(`[useBiddingWebSocket] Socket closed for task ${taskId}. Code: ${event.code}`);
 

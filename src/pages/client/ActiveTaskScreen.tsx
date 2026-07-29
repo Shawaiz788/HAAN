@@ -227,9 +227,6 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
         is_profile_loading: false,
       };
       contextAcceptBid(updatedBid.id, updatedBid);
-      if (Platform.OS === 'android') {
-        ToastAndroid.show('Profile loaded successfully!', ToastAndroid.SHORT);
-      }
     } catch (err) {
       console.warn('[ActiveTaskScreen] Retry profile failed:', err);
       Alert.alert('Profile Error', 'Failed to fetch professional profile. Please check your network and try again.');

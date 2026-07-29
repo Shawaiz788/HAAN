@@ -104,13 +104,19 @@ function closeGlobalSocket() {
     clearGlobalRetryTimer();
     if (globalWs) {
         logger.warn('[useProWebSocket] Closing global LiveJobs WebSocket connection...');
-        globalWs.onclose = null;
-        globalWs.onerror = null;
-        globalWs.onmessage = null;
-        try {
-            globalWs.close(1000, 'Intentional close');
-        } catch (e) {}
+        const wsToClose = globalWs;
         globalWs = null;
+
+        wsToClose.onopen = null;
+        wsToClose.onmessage = null;
+        wsToClose.onerror = null;
+        wsToClose.onclose = null;
+
+        try {
+            if (wsToClose.readyState === WebSocket.OPEN || wsToClose.readyState === WebSocket.CONNECTING) {
+                wsToClose.close(1000, 'Intentional close');
+            }
+        } catch (e) {}
         logger.warn('[useProWebSocket] Global LiveJobs WebSocket closed.');
     }
 }
@@ -174,6 +180,8 @@ function connectGlobalSocket() {
     if (!globalUserId || !globalShouldConnect) return;
     if (globalWs && (globalWs.readyState === WebSocket.OPEN || globalWs.readyState === WebSocket.CONNECTING)) return;
 
+    closeGlobalSocket();
+
     const url = `${WS_BASE}/ws/tasks/`;
     logger.log('[useProWebSocket] Connecting global socket to:', url);
     globalWsStatus = 'connecting';
@@ -182,22 +190,23 @@ function connectGlobalSocket() {
     clearGlobalConnectTimeout();
     globalConnectTimeout = setTimeout(() => {
         if (!globalShouldConnect) return;
-        if (globalWs && globalWs.readyState !== WebSocket.OPEN) {
-            logger.warn('[useProWebSocket] Global WebSocket connection timed out after 2000ms. Re-establishing socket...');
+        if (globalWs && globalWs.readyState === WebSocket.CONNECTING) {
+            logger.warn('[useProWebSocket] Global WebSocket connection timed out after 10000ms. Re-establishing socket...');
             closeGlobalSocket();
             globalWsStatus = 'reconnecting';
             notifyListeners();
             globalRetryDelay = INITIAL_RETRY_DELAY_MS;
             setTimeout(() => {
                 if (globalShouldConnect) connectGlobalSocket();
-            }, 200);
+            }, 500);
         }
-    }, 2000);
+    }, 10000);
 
     const ws = new WebSocket(url);
     globalWs = ws;
 
     ws.onopen = () => {
+        if (ws !== globalWs) return;
         clearGlobalConnectTimeout();
         logger.log('[useProWebSocket] Global socket Connected');
         globalWsStatus = 'connected';
@@ -207,6 +216,7 @@ function connectGlobalSocket() {
     };
 
     ws.onmessage = (event) => {
+        if (ws !== globalWs) return;
         try {
             const msg: WSMessage = JSON.parse(event.data);
             logger.log('[useProWebSocket] Global message received:', msg);
@@ -273,8 +283,12 @@ function connectGlobalSocket() {
                     if (isAssignedToMe && globalOnTaskAssignedToWorker) {
                         logger.log(`[useProWebSocket] Task ${closedTaskId} assigned to current worker ${msgWorkerId}! Triggering assignment callback.`);
                         globalOnTaskAssignedToWorker(Number(closedTaskId), Number(msgWorkerId));
-                    } else if (msgWorkerId && globalOnTaskCancelled && (msg.type === 'task_deleted' || msg.type === 'task_cancelled')) {
-                        globalOnTaskCancelled(Number(closedTaskId), Number(msgWorkerId));
+                    } else if (globalOnTaskCancelled && (msg.type === 'task_deleted' || msg.type === 'task_cancelled')) {
+                        const isTargetedToMe = !msgWorkerId || (globalUserId && Number(msgWorkerId) === Number(globalUserId));
+                        if (isTargetedToMe) {
+                            logger.log(`[useProWebSocket] Task ${closedTaskId} cancelled for worker ${msgWorkerId || globalUserId}. Triggering cancellation callback.`);
+                            globalOnTaskCancelled(Number(closedTaskId), Number(msgWorkerId || globalUserId || 0));
+                        }
                     }
                 }
             }
@@ -284,21 +298,29 @@ function connectGlobalSocket() {
     };
 
     ws.onerror = (e) => {
+        if (ws !== globalWs) return;
         logger.error('[useProWebSocket] Global WebSocket Error:', e);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+        if (ws !== globalWs) return;
         logger.warn('[useProWebSocket] Global socket closed');
         globalWs = null;
-        if (!globalShouldConnect) return;
+        if (!globalShouldConnect) {
+            globalWsStatus = 'disconnected';
+            notifyListeners();
+            return;
+        }
 
         globalWsStatus = 'reconnecting';
         notifyListeners();
 
         clearGlobalRetryTimer();
         globalRetryTimer = setTimeout(() => {
-            logger.log(`[useProWebSocket] Attempting reconnect in ${globalRetryDelay}ms...`);
-            connectGlobalSocket();
+            if (globalShouldConnect) {
+                logger.log(`[useProWebSocket] Attempting reconnect in ${globalRetryDelay}ms...`);
+                connectGlobalSocket();
+            }
             globalRetryDelay = Math.min(globalRetryDelay * 2, MAX_RETRY_DELAY_MS);
         }, globalRetryDelay);
     };

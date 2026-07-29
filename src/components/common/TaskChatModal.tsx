@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/auth';
 import { useTaskChatWebSocket } from '../../hooks/useTaskChatWebSocket';
 import { Colors } from '@/constants/colors';
+import { SkeletonBox } from '@/components/pro/jobDetailBottomSheet/SkeletonBox';
 
 export interface TaskChatModalProps {
   visible: boolean;
@@ -28,6 +29,7 @@ export interface TaskChatModalProps {
   otherUserAvatar?: string;
   onCall?: () => void;
   role?: 'customer' | 'pro';
+  isProfileLoading?: boolean;
 }
 
 export function TaskChatModal({
@@ -38,6 +40,7 @@ export function TaskChatModal({
   otherUserAvatar,
   onCall,
   role = 'customer',
+  isProfileLoading = false,
 }: TaskChatModalProps) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -136,23 +139,35 @@ export function TaskChatModal({
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </Pressable>
 
-          {hasValidAvatar ? (
-            <Image source={{ uri: otherUserAvatar }} style={styles.headerAvatar} />
+          {isProfileLoading ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginLeft: 4 }}>
+              <SkeletonBox width={40} height={40} borderRadius={20} backgroundColor="rgba(255,255,255,0.25)" />
+              <View style={{ gap: 6 }}>
+                <SkeletonBox width={120} height={14} borderRadius={4} backgroundColor="rgba(255,255,255,0.25)" />
+                <SkeletonBox width={80} height={10} borderRadius={4} backgroundColor="rgba(255,255,255,0.25)" />
+              </View>
+            </View>
           ) : (
-            <View style={[styles.headerAvatarPlaceholder, { backgroundColor: isProView ? Colors.pro.accentDim : 'rgba(255,255,255,0.2)' }]}>
-              <Text style={styles.headerAvatarText}>{initials}</Text>
-            </View>
-          )}
+            <>
+              {hasValidAvatar ? (
+                <Image source={{ uri: otherUserAvatar }} style={styles.headerAvatar} />
+              ) : (
+                <View style={[styles.headerAvatarPlaceholder, { backgroundColor: isProView ? Colors.pro.accentDim : 'rgba(255,255,255,0.2)' }]}>
+                  <Text style={styles.headerAvatarText}>{initials}</Text>
+                </View>
+              )}
 
-          <View style={styles.headerDetails}>
-            <Text style={styles.headerName} numberOfLines={1}>{otherUserName}</Text>
-            <View style={styles.statusRow}>
-              <View style={[styles.statusDot, { backgroundColor: isOpen ? '#22C55E' : '#EF4444' }]} />
-              <Text style={styles.statusText}>
-                {isConnecting ? 'Connecting...' : isOpen ? 'In-App Live Session' : 'Session Closed'}
-              </Text>
-            </View>
-          </View>
+              <View style={styles.headerDetails}>
+                <Text style={styles.headerName} numberOfLines={1}>{otherUserName}</Text>
+                <View style={styles.statusRow}>
+                  <View style={[styles.statusDot, { backgroundColor: isOpen ? '#22C55E' : '#EF4444' }]} />
+                  <Text style={styles.statusText}>
+                    {isConnecting ? 'Connecting...' : isOpen ? 'In-App Live Session' : 'Session Closed'}
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
 
           {onCall && (
             <Pressable onPress={onCall} style={styles.headerCallBtn} hitSlop={10}>

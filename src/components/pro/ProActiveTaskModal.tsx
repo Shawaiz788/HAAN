@@ -24,6 +24,8 @@ import { TaskChatModal } from '../common/TaskChatModal';
 import { getPaymentPreferenceName, getPaymentPrefStyleById } from '@/store/paymentStore';
 import { styles } from '@/styles/proActiveTaskModal.styles';
 
+import useProTaskStore from '@/store/proTaskStore';
+
 interface ProActiveTaskModalProps {
     job: LiveJob | null;
     isVisible: boolean;
@@ -67,12 +69,27 @@ export default function ProActiveTaskModal({
             const profileData = await getCustomerProfile(Number(job.customer_id));
             setFetchedProfile(profileData);
             setIsLoadingProfile(false);
+
+            const fullName = [profileData.first_name, profileData.last_name].filter(Boolean).join(' ').trim();
+            const avatarUrl = normalizeImageUrl(profileData.image);
+            if (fullName || avatarUrl) {
+                const currentTask = useProTaskStore.getState().activeProTask;
+                if (currentTask && Number(currentTask.id) === Number(job.id)) {
+                    useProTaskStore.getState().setActiveProTask({
+                        ...currentTask,
+                        customer_name: fullName || currentTask.customer_name,
+                        customer_image: avatarUrl || currentTask.customer_image,
+                        customer_rating: profileData.overall_rating ?? currentTask.customer_rating,
+                        customer_profile: profileData,
+                    });
+                }
+            }
         } catch (err) {
             console.warn('[ProActiveTaskModal] Error loading customer profile:', err);
             setProfileError(true);
             setIsLoadingProfile(false);
         }
-    }, [job?.customer_id]);
+    }, [job?.customer_id, job?.id]);
 
     useEffect(() => {
         if (isVisible && job) {
@@ -393,8 +410,9 @@ export default function ProActiveTaskModal({
                 visible={chatVisible}
                 onClose={() => setChatVisible(false)}
                 taskId={job.id}
-                otherUserName={job.customer_name || 'Customer'}
-                otherUserAvatar={job.customer_image}
+                otherUserName={customerName}
+                otherUserAvatar={customerAvatar}
+                isProfileLoading={isLoadingProfile}
                 onCall={handleCall}
                 role="pro"
             />
@@ -404,7 +422,7 @@ export default function ProActiveTaskModal({
                 isVisible={customerReviewsVisible}
                 onClose={() => setCustomerReviewsVisible(false)}
                 userId={job.customer_id}
-                userName={job.customer_name || 'Customer'}
+                userName={customerName}
                 role="customer"
             />
         </Modal>

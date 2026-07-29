@@ -3,7 +3,7 @@ import { ProEarnings } from '@/types';
 import { logger } from '@/utils/logger';
 
 export const createProEarnings = async (workerId: number | string): Promise<ProEarnings> => {
-    logger.log(`[proEarnings API] Creating earnings entry for worker ID: ${workerId}`);
+    //  logger.log(`[proEarnings API] Creating earnings entry for worker ID: ${workerId}`);
     const response = await fetchWithAuth(`${API_URL}/app/professional/earning/`, {
         method: 'POST',
         headers: {
@@ -16,7 +16,7 @@ export const createProEarnings = async (workerId: number | string): Promise<ProE
     });
 
     const responseText = await response.text();
-    logger.log('[proEarnings API] Create pro earnings response status:', response.status);
+    //logger.log('[proEarnings API] Create pro earnings response status:', response.status);
 
     if (!response.ok) {
         throw new Error(`Failed to create earnings entry. Status: ${response.status}. Response: ${responseText}`);
@@ -30,7 +30,7 @@ export const createProEarnings = async (workerId: number | string): Promise<ProE
 };
 
 export const getProEarnings = async (workerId: number | string): Promise<ProEarnings> => {
-    logger.log(`[proEarnings API] Fetching earnings for worker ID: ${workerId}`);
+    // logger.log(`[proEarnings API] Fetching earnings for worker ID: ${workerId}`);
     const response = await fetchWithAuth(`${API_URL}/app/professional/earning/${workerId}/`, {
         method: 'GET',
         headers: {
@@ -39,15 +39,15 @@ export const getProEarnings = async (workerId: number | string): Promise<ProEarn
     });
 
     const responseText = await response.text();
-    logger.log('[proEarnings API] Get pro earnings response status:', response.status);
+    //  logger.log('[proEarnings API] Get pro earnings response status:', response.status);
 
     if (!response.ok) {
         if (response.status === 404 || responseText.includes('No WorkerEarnings matches')) {
-            logger.log(`[proEarnings API] 404 received. Creating worker earnings record for ID ${workerId}...`);
+            // logger.log(`[proEarnings API] 404 received. Creating worker earnings record for ID ${workerId}...`);
             try {
                 return await createProEarnings(workerId);
             } catch (createErr) {
-                logger.error('[proEarnings API] Fallback earnings creation failed:', createErr);
+                //  logger.error('[proEarnings API] Fallback earnings creation failed:', createErr);
                 return {
                     id: 0,
                     worker_id: Number(workerId),
