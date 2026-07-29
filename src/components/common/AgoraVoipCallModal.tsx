@@ -21,18 +21,10 @@ import {
   RtcConnection,
   IRtcEngineEventHandler,
 } from 'react-native-agora';
-import { generateAgoraToken007 } from '@/utils/agoraTokenBuilder';
+import { useAuth } from '@/context/auth';
+import { fetchAgoraCallToken, getAgoraAppId } from '@/services/agoraService';
+import { logger } from '@/utils/logger';
 import { styles } from '@/styles/agoraVoipCallModal.styles';
-
-const AGORA_APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID || process.env.AGORA_APP_ID || '2bda4e2f148148928cc66f14545f6136';
-const AGORA_APP_CERTIFICATE = process.env.EXPO_PUBLIC_AGORA_APP_CERTIFICATE || process.env.AGORA_APP_CERTIFICATE || '';
-const AGORA_TEMP_TOKEN = process.env.EXPO_PUBLIC_AGORA_TEMP_TOKEN || process.env.AGORA_TEMP_TOKEN || '';
-
-export function getAgoraToken(channelName: string, uid: number = 0): string {
-  if (AGORA_TEMP_TOKEN) return AGORA_TEMP_TOKEN;
-  if (!AGORA_APP_CERTIFICATE || !AGORA_APP_ID) return '';
-  return generateAgoraToken007(AGORA_APP_ID, AGORA_APP_CERTIFICATE, channelName, uid);
-}
 
 export interface AgoraVoipCallModalProps {
   visible: boolean;
@@ -109,6 +101,9 @@ export function AgoraVoipCallModal({
     }
   }, [visible, initialStatus]);
 
+  const { user } = useAuth();
+  const currentUserId = Number(user?.id) || 0;
+
   // Initialize and join Agora native engine when modal opens
   useEffect(() => {
     if (!visible || !taskId) return;
@@ -123,9 +118,16 @@ export function AgoraVoipCallModal({
           ]);
         }
 
+        // Retrieve dynamic call token & metadata from backend: GET /app/message/room/${taskId}/call-token/
+        const tokenData = await fetchAgoraCallToken(taskId, user?.token);
+        if (!isActive) return;
+
+        const targetAppId = tokenData.app_id || getAgoraAppId();
+        const targetChannel = tokenData.channel_name || channelName;
+
         const engine = createAgoraRtcEngine();
         await engine.initialize({
-          appId: AGORA_APP_ID,
+          appId: targetAppId,
           channelProfile: ChannelProfileType.ChannelProfileCommunication,
         });
         if (!isActive) {
@@ -137,22 +139,22 @@ export function AgoraVoipCallModal({
         const eventHandler: IRtcEngineEventHandler = {
           onJoinChannelSuccess: (_connection: RtcConnection) => {
             if (!isActive) return;
-            console.log('[AgoraNative] Joined channel successfully:', channelName);
+            logger.log('[AgoraVoip] Joined channel successfully:', targetChannel, 'as UID:', currentUserId);
             setCallStatus('connected');
           },
           onUserJoined: (_connection: RtcConnection, uid: number) => {
             if (!isActive) return;
-            console.log('[AgoraNative] Remote user joined:', uid);
+            logger.log('[AgoraVoip] Remote user joined:', uid);
             setRemoteUid(uid);
             setCallStatus('connected');
           },
           onUserOffline: (_connection: RtcConnection, uid: number) => {
             if (!isActive) return;
-            console.log('[AgoraNative] Remote user left:', uid);
+            logger.log('[AgoraVoip] Remote user left:', uid);
             setRemoteUid(0);
           },
           onError: (err: number, msg: string) => {
-            console.warn('[AgoraNative] Engine error:', err, msg);
+            logger.warn('[AgoraVoip] Engine error:', err, msg);
           },
         };
 
@@ -161,17 +163,15 @@ export function AgoraVoipCallModal({
         engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
         engine.enableAudio();
 
-        // Join channel with dynamic token signed by Primary Certificate
-        const token = getAgoraToken(channelName, 0);
-        console.log('[AgoraNative] Joining channel:', channelName, '| AppID:', AGORA_APP_ID, '| AppCert:', AGORA_APP_CERTIFICATE ? 'Configured' : 'Missing', '| TokenPrefix:', token ? token.substring(0, 10) + '...' : 'EMPTY');
-        engine.joinChannel(token, channelName, 0, {
+        logger.log('[AgoraVoip] Joining channel:', targetChannel, 'with UID:', currentUserId);
+        engine.joinChannel(tokenData.token, targetChannel, currentUserId, {
           channelProfile: ChannelProfileType.ChannelProfileCommunication,
           clientRoleType: ClientRoleType.ClientRoleBroadcaster,
           publishMicrophoneTrack: true,
           autoSubscribeAudio: true,
         });
       } catch (e: any) {
-        console.error('[AgoraNative] Exception setup:', e?.message || e);
+        logger.error('[AgoraVoip] Exception during engine setup:', e?.message || e);
       }
     };
 

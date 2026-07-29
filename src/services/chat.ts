@@ -14,6 +14,7 @@ export interface ChatMessageItem {
   body: string;
   sequence: number;
   reply_to?: number | string | null;
+  attachment_id?: number | null;
   created_at?: string;
 }
 

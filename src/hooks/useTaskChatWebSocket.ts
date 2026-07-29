@@ -6,6 +6,7 @@ import {
   fetchOlderMessages,
   ChatMessageItem,
 } from '@/services/chat';
+import { uploadAttachment, getAttachmentById } from '@/services/task';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 const WS_BASE = BASE_URL
@@ -28,8 +29,11 @@ export interface UseTaskChatWebSocketResult {
   chatError: string | null;
   hasMoreOlderMessages: boolean;
   isLoadingOlder: boolean;
-  sendMessage: (body: string, replyToId?: number | string | null) => void;
+  attachmentCache: Record<string | number, string>;
+  isUploadingAttachment: boolean;
+  sendMessage: (body: string, replyToId?: number | string | null, attachmentId?: number | null) => void;
   sendCallSignal: (signal: 'incoming_call' | 'call_accepted' | 'call_declined' | 'call_ended', payload?: any) => void;
+  uploadAndSendAttachment: (uri: string, caption?: string) => Promise<void>;
   loadOlderMessages: () => Promise<void>;
   reconnect: () => void;
 }
@@ -48,12 +52,46 @@ export function useTaskChatWebSocket({
   const [chatError, setChatError] = useState<string | null>(null);
   const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState<boolean>(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState<boolean>(false);
+  const [attachmentCache, setAttachmentCache] = useState<Record<string | number, string>>({});
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState<boolean>(false);
 
   const socketRef = useRef<WebSocket | null>(null);
   const onIncomingCallSignalRef = useRef(onIncomingCallSignal);
   useEffect(() => {
     onIncomingCallSignalRef.current = onIncomingCallSignal;
   }, [onIncomingCallSignal]);
+
+  // Auto-scan messages for missing attachment URLs and resolve them
+  useEffect(() => {
+    messages.forEach((m: any) => {
+      const attId = m.attachment_id ?? m.attachment;
+      if (m.attachment_url && typeof m.attachment_url === 'string') {
+        const key = attId != null ? String(attId) : String(m.id);
+        setAttachmentCache((prev) => (prev[key] === m.attachment_url ? prev : { ...prev, [key]: m.attachment_url }));
+        return;
+      }
+      if (m.attachment && typeof m.attachment === 'object' && (m.attachment.url || m.attachment.file)) {
+        const url = m.attachment.url || m.attachment.file;
+        const key = attId != null ? String(attId) : String(m.id);
+        setAttachmentCache((prev) => (prev[key] === url ? prev : { ...prev, [key]: url }));
+        return;
+      }
+      if (attId != null && typeof attId !== 'object') {
+        const keyStr = String(attId);
+        if (!attachmentCache[keyStr]) {
+          logger.log('[useTaskChatWS] Triggering attachment resolution for ID:', attId);
+          getAttachmentById(attId, taskId ? Number(taskId) : undefined)
+            .then((att) => {
+              if (att.url) {
+                logger.log('[useTaskChatWS] Successfully resolved attachment URL for ID:', attId, att.url);
+                setAttachmentCache((prev) => ({ ...prev, [keyStr]: att.url, [Number(attId)]: att.url }));
+              }
+            })
+            .catch((e) => logger.warn('[useTaskChatWS] Failed to resolve attachment:', attId, e));
+        }
+      }
+    });
+  }, [messages, attachmentCache, taskId]);
 
   const sendCallSignal = useCallback((signal: 'incoming_call' | 'call_accepted' | 'call_declined' | 'call_ended', extraPayload?: any) => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
@@ -272,23 +310,55 @@ export function useTaskChatWebSocket({
 
   // Step 6: Send a message
   const sendMessage = useCallback(
-    (body: string, replyToId: number | string | null = null) => {
-      if (!body.trim()) return;
+    (body: string, replyToId: number | string | null = null, attachmentId: number | null = null) => {
+      const trimmedBody = body.trim();
+      if (!trimmedBody && !attachmentId) return;
       if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
         logger.warn('[useTaskChatWS] Cannot send: WebSocket is not open.');
         return;
       }
 
-      const payload = {
+      const payload: any = {
         type: 'send_message',
-        body: body.trim(),
+        body: trimmedBody,
         reply_to: replyToId ?? null,
       };
+
+      if (attachmentId) {
+        payload.attachment_id = attachmentId;
+      }
 
       logger.log('[useTaskChatWS] Sending message payload:', payload);
       socketRef.current.send(JSON.stringify(payload));
     },
     []
+  );
+
+  // Helper to upload file first then send message with attachment_id
+  const uploadAndSendAttachment = useCallback(
+    async (uri: string, caption: string = '') => {
+      if (!taskId) return;
+      setIsUploadingAttachment(true);
+      try {
+        const numericTaskId = Number(taskId);
+        const result = await uploadAttachment(uri, numericTaskId);
+        logger.log('[useTaskChatWS] Uploaded attachment:', result);
+        if (result.url) {
+          setAttachmentCache((prev) => ({
+            ...prev,
+            [String(result.id)]: result.url,
+            [Number(result.id)]: result.url,
+          }));
+        }
+        sendMessage(caption, null, result.id);
+      } catch (err: any) {
+        logger.error('[useTaskChatWS] Attachment upload error:', err?.message || err);
+        throw err;
+      } finally {
+        setIsUploadingAttachment(false);
+      }
+    },
+    [taskId, sendMessage]
   );
 
   // Step 7: Load older messages (scroll-back pagination)
@@ -312,6 +382,19 @@ export function useTaskChatWebSocket({
       if (res.results && res.results.length > 0) {
         const olderChronological = [...res.results].reverse();
         setMessages((prev) => prependDeduplicated(prev, olderChronological));
+
+        // Resolve attachments for older messages
+        olderChronological.forEach((m: any) => {
+          if (m.attachment_id && typeof m.attachment_id === 'number') {
+            getAttachmentById(m.attachment_id)
+              .then((att) => {
+                if (att.url) {
+                  setAttachmentCache((prev) => ({ ...prev, [m.attachment_id]: att.url }));
+                }
+              })
+              .catch(() => {});
+          }
+        });
       }
     } catch (err) {
       logger.warn('[useTaskChatWS] Failed to fetch older messages:', err);
@@ -332,8 +415,11 @@ export function useTaskChatWebSocket({
     chatError,
     hasMoreOlderMessages,
     isLoadingOlder,
+    attachmentCache,
+    isUploadingAttachment,
     sendMessage,
     sendCallSignal,
+    uploadAndSendAttachment,
     loadOlderMessages,
     reconnect: forceReconnect,
   };

@@ -5,6 +5,8 @@ import { logger } from '@/utils/logger';
 import { getOrCreateLocationChain } from './location';
 import { resolveLocationFromCoordinates } from './geofenceService';
 
+import { normalizeImageUrl } from './customer';
+
 export { Category, PaymentPreference, Status };
 export type Task = BackendTask;
 
@@ -49,7 +51,7 @@ export const getTaskAttachments = async (taskId: number): Promise<any[]> => {
 };
 
 // Upload file to backend attachment endpoint using multipart/form-data, linking it to taskId
-export const uploadAttachment = async (uri: string, taskId: number): Promise<number> => {
+export const uploadAttachment = async (uri: string, taskId: number): Promise<{ id: number; url: string }> => {
   logger.log(`[task API] Uploading attachment from uri: ${uri} for Task ID: ${taskId}`);
 
   const formData = new FormData();
@@ -83,9 +85,61 @@ export const uploadAttachment = async (uri: string, taskId: number): Promise<num
 
   try {
     const data = JSON.parse(responseText);
-    return data.id;
+    const item = Array.isArray(data) ? data[0] : data;
+    const rawUrl = item?.url || item?.file || item?.image || uri;
+    const url = normalizeImageUrl(rawUrl) || rawUrl;
+    return { id: item?.id || data.id, url };
   } catch (e) {
     throw new Error(`Failed to parse attachment upload response. Content: ${responseText}`);
+  }
+};
+
+// Fetch attachment details by ID (with fallback to Task attachments list)
+export const getAttachmentById = async (
+  attachmentId: number | string,
+  taskId?: number | string
+): Promise<{ id: number | string; url: string }> => {
+  try {
+    logger.log(`[task API] Fetching attachment details for ID: ${attachmentId} (Task ID: ${taskId})`);
+    const response = await fetchWithAuth(`${API_URL}/app/attachment/${attachmentId}/`);
+    if (response.ok) {
+      const data = await response.json();
+      logger.log(`[task API] Attachment ${attachmentId} response data:`, data);
+      let item: any = null;
+      if (Array.isArray(data)) {
+        item = data.find((x: any) => String(x.id) === String(attachmentId)) || data[0];
+      } else {
+        item = data;
+      }
+      const rawUrl = item?.url || item?.file || item?.image || (item?.attachment && (item.attachment.file || item.attachment.url)) || '';
+      if (rawUrl) {
+        const normalizedUrl = normalizeImageUrl(rawUrl) || rawUrl;
+        logger.log(`[task API] Resolved normalized URL for attachment ${attachmentId}:`, normalizedUrl);
+        return { id: item?.id || attachmentId, url: normalizedUrl };
+      }
+    }
+
+    // Fallback: If single attachment lookup returned empty array or failed, query task attachments
+    if (taskId) {
+      logger.log(`[task API] Fallback: Querying all attachments for Task ID: ${taskId}`);
+      const taskResponse = await fetchWithAuth(`${API_URL}/app/attachment/${taskId}/`);
+      if (taskResponse.ok) {
+        const taskData = await taskResponse.json();
+        const list = Array.isArray(taskData) ? taskData : (taskData.results || taskData.attachments || []);
+        const match = list.find((x: any) => String(x.id) === String(attachmentId));
+        if (match) {
+          const rawUrl = match.url || match.file || match.image || '';
+          const normalizedUrl = normalizeImageUrl(rawUrl) || rawUrl;
+          logger.log(`[task API] Fallback resolved URL for attachment ${attachmentId}:`, normalizedUrl);
+          return { id: match.id || attachmentId, url: normalizedUrl };
+        }
+      }
+    }
+
+    return { id: attachmentId, url: '' };
+  } catch (e: any) {
+    logger.warn(`[task API] Exception fetching attachment ${attachmentId}:`, e?.message || e);
+    return { id: attachmentId, url: '' };
   }
 };
 

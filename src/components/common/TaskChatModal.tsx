@@ -9,12 +9,13 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  StyleSheet,
   StatusBar,
   Keyboard,
   Animated,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/auth';
 import { useTaskChatWebSocket } from '../../hooks/useTaskChatWebSocket';
@@ -22,6 +23,10 @@ import { Colors } from '@/constants/colors';
 import { SkeletonBox } from '@/components/pro/jobDetailBottomSheet/SkeletonBox';
 import { AgoraVoipCallModal } from './AgoraVoipCallModal';
 import { IncomingCallModal, IncomingCallData } from './IncomingCallModal';
+import { ChatMessageBubble } from './ChatMessageBubble';
+import { ChatImagePreviewModal } from './ChatImagePreviewModal';
+import { styles } from '@/styles/taskChatModal.styles';
+import { logger } from '@/utils/logger';
 
 export interface TaskChatModalProps {
   visible: boolean;
@@ -50,6 +55,7 @@ export function TaskChatModal({
   const [voipModalVisible, setVoipModalVisible] = useState(false);
   const [voipCallStatus, setVoipCallStatus] = useState<'calling' | 'connected' | 'ended' | 'declined'>('calling');
   const [incomingCallData, setIncomingCallData] = useState<IncomingCallData | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
 
@@ -60,8 +66,11 @@ export function TaskChatModal({
     chatError,
     hasMoreOlderMessages,
     isLoadingOlder,
+    attachmentCache,
+    isUploadingAttachment,
     sendMessage,
     sendCallSignal,
+    uploadAndSendAttachment,
     loadOlderMessages,
     reconnect,
   } = useTaskChatWebSocket({
@@ -78,80 +87,78 @@ export function TaskChatModal({
         });
       } else if (data.signal === 'call_declined') {
         setIncomingCallData(null);
-        setVoipCallStatus('declined');
-        setTimeout(() => {
-          setVoipModalVisible(false);
-        }, 1200);
-      } else if (data.signal === 'call_ended') {
-        setIncomingCallData(null);
-        setVoipCallStatus('ended');
-        setTimeout(() => {
-          setVoipModalVisible(false);
-        }, 400);
       } else if (data.signal === 'call_accepted') {
-        setIncomingCallData(null);
         setVoipCallStatus('connected');
         setVoipModalVisible(true);
+        setIncomingCallData(null);
+      } else if (data.signal === 'call_ended') {
+        setVoipCallStatus('ended');
+        setVoipModalVisible(false);
+        setIncomingCallData(null);
       }
     },
   });
 
+  const isProView = role === 'pro';
+  const headerBg = isProView ? Colors.pro.header : Colors.brand.dark;
+  const bubbleUserBg = isProView ? Colors.pro.header : Colors.brand.dark;
+  const getUserDisplayName = () => (user as any)?.name || (user as any)?.first_name || user?.email?.split('@')[0] || (isProView ? 'Professional' : 'Customer');
+
   const handleInitiateCall = () => {
     setVoipCallStatus('calling');
-    sendCallSignal('incoming_call', {
-      caller_name: user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'User',
-      caller_avatar: (user as any)?.avatar || (user as any)?.image || '',
-    });
     setVoipModalVisible(true);
+    const callerName = getUserDisplayName();
+    sendCallSignal('incoming_call', { caller_name: callerName });
   };
 
   const handleAcceptIncoming = () => {
-    sendCallSignal('call_accepted');
-    setIncomingCallData(null);
+    sendCallSignal('call_accepted', { caller_name: getUserDisplayName() });
     setVoipCallStatus('connected');
     setVoipModalVisible(true);
+    setIncomingCallData(null);
   };
 
   const handleDeclineIncoming = () => {
-    sendCallSignal('call_declined');
+    sendCallSignal('call_declined', { caller_name: getUserDisplayName() });
     setIncomingCallData(null);
   };
 
   const handleEndCallSignal = () => {
-    sendCallSignal('call_ended');
+    sendCallSignal('call_ended', { caller_name: getUserDisplayName() });
+    setVoipCallStatus('ended');
+    setVoipModalVisible(false);
   };
 
+  // Keyboard height handling
   useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       (e) => {
-        const h = e?.endCoordinates?.height || 0;
         Animated.timing(keyboardHeightAnim, {
-          toValue: h,
-          duration: Platform.OS === 'ios' ? e.duration || 250 : 150,
+          toValue: e.endCoordinates.height,
+          duration: Platform.OS === 'ios' ? e.duration || 250 : 200,
           useNativeDriver: false,
         }).start();
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
       }
     );
-
     const hideSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
       (e) => {
         Animated.timing(keyboardHeightAnim, {
           toValue: 0,
-          duration: Platform.OS === 'ios' ? e?.duration || 250 : 150,
+          duration: Platform.OS === 'ios' ? e.duration || 250 : 200,
           useNativeDriver: false,
         }).start();
       }
     );
-
     return () => {
       showSub.remove();
       hideSub.remove();
     };
   }, [keyboardHeightAnim]);
 
-  // Scroll to bottom when new messages arrive
+  // Auto scroll to bottom when new messages arrive
   useEffect(() => {
     if (messages.length > 0) {
       setTimeout(() => {
@@ -160,23 +167,45 @@ export function TaskChatModal({
     }
   }, [messages.length]);
 
-  if (!visible) return null;
-
   const handleSend = () => {
     if (!inputText.trim()) return;
-    sendMessage(inputText.trim());
+    sendMessage(inputText);
     setInputText('');
   };
 
-  const hasValidAvatar = Boolean(otherUserAvatar && otherUserAvatar.trim().length > 0);
-  const initials = (otherUserName || 'User').charAt(0).toUpperCase();
+  const handlePickImage = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Please allow access to your photo library to attach images.');
+        return;
+      }
 
-  const isProView = role === 'pro';
-  const headerBg = isProView ? Colors.pro.header : '#16A34A';
-  const bubbleUserBg = isProView ? '#059669' : '#16A34A';
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        const imageUri = result.assets[0].uri;
+        const captionText = inputText.trim();
+        setInputText('');
+        await uploadAndSendAttachment(imageUri, captionText);
+      }
+    } catch (err: any) {
+      logger.warn('[TaskChatModal] Error picking/uploading image attachment:', err?.message || err);
+      Alert.alert('Upload Failed', 'Could not upload attachment. Please try again.');
+    }
+  };
+
+  if (!visible) return null;
+
+  const initials = (otherUserName || 'U').charAt(0).toUpperCase();
+  const hasValidAvatar = Boolean(otherUserAvatar && otherUserAvatar.trim().length > 0);
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
       <StatusBar barStyle="light-content" backgroundColor={headerBg} />
       <Animated.View
         style={[
@@ -275,48 +304,42 @@ export function TaskChatModal({
 
           {messages.map((msg) => {
             const isUser = Number(msg.sender_id) === Number(user?.id);
-            const timeStr = msg.created_at
-              ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : '';
+            const resolvedUrl = msg.attachment_id ? attachmentCache[msg.attachment_id] : undefined;
 
             return (
-              <View
+              <ChatMessageBubble
                 key={String(msg.id || msg.sequence)}
-                style={[
-                  styles.bubbleContainer,
-                  isUser ? styles.bubbleContainerUser : styles.bubbleContainerOther,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.bubble,
-                    isUser ? { backgroundColor: bubbleUserBg } : styles.bubbleOther,
-                  ]}
-                >
-                  {!isUser && msg.sender_name && (
-                    <Text style={styles.senderLabel}>{msg.sender_name}</Text>
-                  )}
-                  <Text style={isUser ? styles.bubbleUserText : styles.bubbleOtherText}>
-                    {msg.body}
-                  </Text>
-                </View>
-                {Boolean(timeStr) && (
-                  <Text style={styles.timeText}>{timeStr}</Text>
-                )}
-              </View>
+                msg={msg}
+                isUser={isUser}
+                bubbleUserBg={bubbleUserBg}
+                attachmentUrl={resolvedUrl}
+                onPressImage={(url) => setPreviewImageUrl(url)}
+              />
             );
           })}
         </ScrollView>
 
         {/* Input Bar */}
         <View style={styles.inputContainer}>
+          <Pressable
+            style={styles.attachBtn}
+            onPress={handlePickImage}
+            disabled={!isOpen || isConnecting || isUploadingAttachment}
+          >
+            {isUploadingAttachment ? (
+              <ActivityIndicator size="small" color={headerBg} />
+            ) : (
+              <Ionicons name="image-outline" size={22} color="#6B7280" />
+            )}
+          </Pressable>
+
           <TextInput
             style={styles.inputField}
             placeholder={isOpen ? "Type a message..." : "Chat is closed for this task"}
             placeholderTextColor="#9CA3AF"
             value={inputText}
             onChangeText={setInputText}
-            editable={isOpen && !isConnecting}
+            editable={isOpen && !isConnecting && !isUploadingAttachment}
             multiline
             onFocus={() => {
               setTimeout(() => {
@@ -324,17 +347,24 @@ export function TaskChatModal({
               }, 150);
             }}
           />
+
           <Pressable
             style={[
               styles.sendBtn,
               { backgroundColor: isOpen && inputText.trim().length > 0 ? headerBg : '#9CA3AF' },
             ]}
             onPress={handleSend}
-            disabled={!isOpen || isConnecting || inputText.trim() === ''}
+            disabled={!isOpen || isConnecting || isUploadingAttachment || inputText.trim() === ''}
           >
             <Ionicons name="send" size={18} color="#FFFFFF" />
           </Pressable>
         </View>
+
+        {/* Image Full-Screen Preview Lightbox Modal */}
+        <ChatImagePreviewModal
+          imageUrl={previewImageUrl}
+          onClose={() => setPreviewImageUrl(null)}
+        />
 
         {/* In-App Voice Call Modal */}
         <AgoraVoipCallModal
@@ -359,202 +389,5 @@ export function TaskChatModal({
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-  },
-  headerBackBtn: {
-    padding: 4,
-    marginRight: 8,
-  },
-  headerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
-  },
-  headerAvatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  headerAvatarText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  headerDetails: {
-    flex: 1,
-  },
-  headerName: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6,
-  },
-  statusText: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  headerCallBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  errorBanner: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FCA5A5',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  errorBannerText: {
-    flex: 1,
-    color: '#991B1B',
-    fontSize: 13,
-  },
-  retryBtn: {
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  retryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  messagesList: {
-    flex: 1,
-  },
-  paginationContainer: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  paginationBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 14,
-  },
-  paginationText: {
-    color: '#4B5563',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  systemInfoPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: 16,
-  },
-  systemInfoText: {
-    color: '#6B7280',
-    fontSize: 11,
-    textAlign: 'center',
-  },
-  bubbleContainer: {
-    marginBottom: 12,
-    maxWidth: '80%',
-  },
-  bubbleContainerUser: {
-    alignSelf: 'flex-end',
-  },
-  bubbleContainerOther: {
-    alignSelf: 'flex-start',
-  },
-  bubble: {
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  bubbleOther: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  senderLabel: {
-    color: '#6B7280',
-    fontSize: 10,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  bubbleUserText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  bubbleOtherText: {
-    color: '#1F2937',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  timeText: {
-    color: '#9CA3AF',
-    fontSize: 10,
-    marginTop: 4,
-    alignSelf: 'flex-end',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  inputField: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    maxHeight: 100,
-    fontSize: 14,
-    color: '#111827',
-  },
-  sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
-  },
-});
 
 export default TaskChatModal;
