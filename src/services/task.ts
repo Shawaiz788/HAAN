@@ -213,7 +213,7 @@ export const createTaskChain = async (input: TaskChainInput): Promise<Task> => {
     created_by: userId,
     preferred_time: preferredTime,
     location_id: finalLocationId,
-    status_id: TASK_STATUS.OPEN,
+    status_id: TASK_STATUS.SEARCHING,
     payment_preference_id: paymentPreferenceId,
     accurately_estimated: 0,
     subcategory_id: subcategoryId,

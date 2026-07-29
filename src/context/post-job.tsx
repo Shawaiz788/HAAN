@@ -129,7 +129,7 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
             logger.log('[PostJobProvider] Customer tasks list contained no active tasks. Verifying active task via individual API before clearing...');
             const singleTask = await getTaskByIdFromBackend(currentActive.backend_id);
             if (!isMounted) return;
-            if (!singleTask || singleTask.status_id === TASK_STATUS.CANCELLED || singleTask.status_id === TASK_STATUS.CANCELLED_BY_SYSTEM || singleTask.status_id === TASK_STATUS.COMPLETED) {
+            if (!singleTask || singleTask.status_id === TASK_STATUS.CANCELLED || singleTask.status_id === TASK_STATUS.COMPLETED) {
               logger.log('[PostJobProvider] Confirmed task is ended on backend. Clearing active task.');
               setStoreActiveTask(null);
             } else {
@@ -140,7 +140,7 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
           logger.log('[PostJobProvider] Backend customer task list empty. Verifying active task via individual API before clearing...');
           const singleTask = await getTaskByIdFromBackend(currentActive.backend_id);
           if (!isMounted) return;
-          if (!singleTask || singleTask.status_id === TASK_STATUS.CANCELLED || singleTask.status_id === TASK_STATUS.CANCELLED_BY_SYSTEM || singleTask.status_id === TASK_STATUS.COMPLETED) {
+          if (!singleTask || singleTask.status_id === TASK_STATUS.CANCELLED || singleTask.status_id === TASK_STATUS.COMPLETED) {
             logger.log('[PostJobProvider] Confirmed task is ended on backend. Clearing MMKV.');
             setStoreActiveTask(null);
           } else {

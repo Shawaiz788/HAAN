@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/auth';
 import { Colors } from '@/constants/colors';
+import { TASK_STATUS } from '@/constants/taskStatus';
 import { getWorkerTasksFromBackend, getTaskByIdFromBackend, updateTaskStatusOnBackend, getCompletedStatusId } from '@/services/task';
 import { getCustomerProfile, normalizeImageUrl } from '@/services/customer';
 import { getLocationById } from '@/services/location';
@@ -100,7 +101,7 @@ export default function ProLiveJobsView() {
             try {
                 const tasks = await getWorkerTasksFromBackend(workerId);
                 if (!isMounted) return;
-                const activeBackendTask = Array.isArray(tasks) ? tasks.find((t) => t.status_id !== 4 && t.status_id !== 5 && t.status_id !== 3) : undefined;
+                const activeBackendTask = Array.isArray(tasks) ? tasks.find((t) => t.status_id !== TASK_STATUS.COMPLETED && t.status_id !== TASK_STATUS.CANCELLED) : undefined;
                 if (activeBackendTask) {
                     const currentAssigned = useProTaskStore.getState().activeProTask;
                     if (!currentAssigned || Number(currentAssigned.id) !== Number(activeBackendTask.id)) {
@@ -122,11 +123,11 @@ export default function ProLiveJobsView() {
                         console.log(`[ProLiveJobsView] No active task in worker list. Verifying active task ${currentAssigned.id} individually...`);
                         const singleTask = await getTaskByIdFromBackend(Number(currentAssigned.id));
                         if (!isMounted) return;
-                        if (!singleTask || singleTask.status_id === 4 || singleTask.status_id === 5 || singleTask.status_id === 3) {
+                        if (!singleTask || singleTask.status_id === TASK_STATUS.COMPLETED || singleTask.status_id === TASK_STATUS.CANCELLED) {
                             console.log(`[ProLiveJobsView] Confirmed task ${currentAssigned.id} is ended. Clearing active pro task.`);
                             setAssignedJob(null);
                         } else {
-                            console.log(`[ProLiveJobsView] Task ${currentAssigned.id} is still active on backend. Retaining active pro task.`);
+                            console.log(`[ProLiveJobsView] Task ${currentAssigned.id} is still active on backend (status_id=${singleTask.status_id}). Retaining active pro task.`);
                         }
                     }
                 }

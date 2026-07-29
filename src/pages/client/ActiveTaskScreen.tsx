@@ -19,6 +19,7 @@ import { usePostJob, Bid } from '@/context/post-job';
 import { useAuth } from '@/context/auth';
 import { useBiddingWebSocket } from '@/hooks/useBiddingWebSocket';
 import { useRouter } from 'expo-router';
+import { TASK_STATUS } from '@/constants/taskStatus';
 import { getTaskByIdFromBackend } from '@/services/task';
 import { getCustomerProfile } from '@/services/customer';
 import { createReview } from '@/services/review';
@@ -176,15 +177,15 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
           return;
         }
 
-        if (taskData.status_id === 4 || (taskData as any).status === 'completed') {
+        if (taskData.status_id === TASK_STATUS.COMPLETED || (taskData as any).status === 'completed') {
           const proName = activeTask.acceptedBid?.name || 'Service Provider';
           const proId = (activeTask.acceptedBid as any)?.user_id || 1;
           const taskTitle = activeTask.category || 'Service Request';
 
           setCompletedTaskInfo({ id: taskId, proName, proId, title: taskTitle });
           setReviewModalVisible(true);
-        } else if (taskData.status_id === 5) {
-          cancelTask()
+        } else if (taskData.status_id === TASK_STATUS.CANCELLED) {
+          cancelTask();
         }
       } catch (err) {
         console.warn('[ActiveTaskScreen] Error polling task status:', err);
