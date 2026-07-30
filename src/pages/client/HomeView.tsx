@@ -205,15 +205,24 @@ export default function HomeView({ userName }: HomeViewProps) {
           setMapCoords(savedCoords);
 
           if (webViewRef.current) {
+            // Vertical Map Offset Calculation: Shifts the Leaflet viewport center so the target GPS (lat, lng)
+            // aligns directly under the UI map pin icon (which sits at 35% top screen height above the bottom sheet).
             const jsCode = `
               if (typeof map !== 'undefined' && map) {
                 var currZoom = map.getZoom() || 15;
+                // 1. Convert GPS coordinates to Leaflet LatLng object
                 var targetLatLng = L.latLng(${lat}, ${lng});
+                // 2. Project geographic (lat, lng) to 2D pixel coordinates (X, Y)
                 var targetPoint = map.project(targetLatLng, currZoom);
+                // 3. Get total viewport dimensions
                 var size = map.getSize();
+                // 4. Calculate vertical offset (50% screen center - 35% pin position = 15% vertical shift)
                 var offset = L.point(0, size.y * (0.5 - 0.35));
+                // 5. Shift pixel coordinates downwards by the offset
                 var centerPoint = targetPoint.add(offset);
+                // 6. Convert shifted pixel point back to geographic (lat, lng)
                 var centerLatLng = map.unproject(centerPoint, currZoom);
+                // 7. Pan map to new center so target coordinate sits directly underneath the 35% map pin
                 map.setView(centerLatLng, currZoom);
               }
               true;
