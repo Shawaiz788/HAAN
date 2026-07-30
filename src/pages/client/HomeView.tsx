@@ -318,6 +318,8 @@ export default function HomeView({ userName }: HomeViewProps) {
         locateBtnStyle={locateBtnStyle}
         reCenterMap={reCenterMap}
         loadingLocation={loadingLocation || isLocationSyncing}
+        isLocationSyncing={isLocationSyncing}
+        isLocationAvailable={isLocationAvailable}
         isGeocoding={isGeocoding}
         isConnected={isConnected}
       />

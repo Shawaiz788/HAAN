@@ -85,10 +85,19 @@ export const uploadAttachment = async (uri: string, taskId: number): Promise<{ i
 
   try {
     const data = JSON.parse(responseText);
-    const item = Array.isArray(data) ? data[0] : data;
-    const rawUrl = item?.url || item?.file || item?.image || uri;
+    // If backend returns list of task attachments, select the newly uploaded item at the end of the array
+    let item: any = null;
+    if (Array.isArray(data)) {
+      item = data.length > 0 ? data[data.length - 1] : null;
+    } else {
+      item = data;
+    }
+
+    const rawUrl = item?.url || item?.file || item?.image || (item?.attachment && (item.attachment.file || item.attachment.url)) || uri;
     const url = normalizeImageUrl(rawUrl) || rawUrl;
-    return { id: item?.id || data.id, url };
+    const itemId = item?.id || item?.attachment_id || data?.id;
+    logger.log(`[task API] Parsed uploaded attachment ID: ${itemId}, URL: ${url}`);
+    return { id: Number(itemId) || data.id, url };
   } catch (e) {
     throw new Error(`Failed to parse attachment upload response. Content: ${responseText}`);
   }
@@ -111,26 +120,34 @@ export const getAttachmentById = async (
       logger.log(`[task API] Attachment ${attachmentId} response data:`, data);
       let item: any = null;
       if (Array.isArray(data)) {
-        item = data.find((x: any) => String(x.id) === String(attachmentId)) || data[0];
-      } else {
-        item = data;
+        // Strictly match by ID. Do NOT fallback to data[0] blindly!
+        item = data.find((x: any) => String(x.id) === String(attachmentId) || String(x.attachment_id) === String(attachmentId));
+      } else if (data && typeof data === 'object') {
+        if (data.id && String(data.id) !== String(attachmentId) && data.task_id) {
+          item = (String(data.id) === String(attachmentId) || String(data.attachment_id) === String(attachmentId)) ? data : null;
+        } else {
+          item = data;
+        }
       }
-      const rawUrl = item?.url || item?.file || item?.image || (item?.attachment && (item.attachment.file || item.attachment.url)) || '';
-      if (rawUrl) {
-        const normalizedUrl = normalizeImageUrl(rawUrl) || rawUrl;
-        logger.log(`[task API] Resolved normalized URL for attachment ${attachmentId}:`, normalizedUrl);
-        return { id: item?.id || attachmentId, url: normalizedUrl };
+
+      if (item) {
+        const rawUrl = item?.url || item?.file || item?.image || (item?.attachment && (item.attachment.file || item.attachment.url)) || '';
+        if (rawUrl) {
+          const normalizedUrl = normalizeImageUrl(rawUrl) || rawUrl;
+          logger.log(`[task API] Resolved normalized URL for attachment ${attachmentId}:`, normalizedUrl);
+          return { id: item?.id || attachmentId, url: normalizedUrl };
+        }
       }
     }
 
-    // Fallback: If single attachment lookup returned empty array or failed, query task attachments
+    // Fallback: If single attachment lookup returned empty array or didn't match exact ID, query task attachments
     if (taskId) {
       logger.log(`[task API] Fallback: Querying all attachments for Task ID: ${taskId}`);
       const taskResponse = await fetchWithAuth(`${API_URL}/app/attachment/${taskId}/`);
       if (taskResponse.ok) {
         const taskData = await taskResponse.json();
         const list = Array.isArray(taskData) ? taskData : (taskData.results || taskData.attachments || []);
-        const match = list.find((x: any) => String(x.id) === String(attachmentId));
+        const match = list.find((x: any) => String(x.id) === String(attachmentId) || String(x.attachment_id) === String(attachmentId));
         if (match) {
           const rawUrl = match.url || match.file || match.image || '';
           const normalizedUrl = normalizeImageUrl(rawUrl) || rawUrl;
