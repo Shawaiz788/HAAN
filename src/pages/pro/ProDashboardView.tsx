@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,6 +8,9 @@ import {
     StatusBar,
     Dimensions,
     Image,
+    Animated,
+    Easing,
+    RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -121,37 +124,63 @@ export default function ProDashboardView() {
     const [loadingEarnings, setLoadingEarnings] = useState(true);
     const [recentJobs, setRecentJobs] = useState<any[]>([]);
     const [loadingJobs, setLoadingJobs] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const spinAnim = useRef(new Animated.Value(0)).current;
+
+    const refreshDashboard = useCallback(async () => {
+        if (!user?.id || isRefreshing) return;
+        setIsRefreshing(true);
+        setLoadingEarnings(true);
+        setLoadingJobs(true);
+
+        spinAnim.setValue(0);
+        const spinAnimation = Animated.loop(
+            Animated.timing(spinAnim, {
+                toValue: 1,
+                duration: 800,
+                easing: Easing.linear,
+                useNativeDriver: true,
+            })
+        );
+        spinAnimation.start();
+
+        try {
+            const [, tasksRes] = await Promise.allSettled([
+                fetchEarnings(user.id, true),
+                getWorkerTasksFromBackend(user.id),
+            ]);
+
+            if (tasksRes.status === 'fulfilled' && Array.isArray(tasksRes.value)) {
+                const mapped = tasksRes.value.slice(0, 5).map((t) => ({
+                    id: t.id?.toString() || Math.random().toString(),
+                    title: t.subject || 'Service Task',
+                    address: t.body || 'Specified Location',
+                    amount: `Rs. ${t.price ? t.price.toLocaleString() : '0'}`,
+                    icon: t.status_id === 4 ? 'checkmark-circle' : t.status_id === 5 ? 'close-circle' : 'briefcase',
+                    color: t.status_id === 4 ? '#22C55E' : t.status_id === 5 ? '#EF4444' : '#3B82F6',
+                    status: t.status_id === 4 ? 'Done' : t.status_id === 5 ? 'Cancelled' : 'Active',
+                }));
+                setRecentJobs(mapped);
+            }
+        } catch (err) {
+            console.error('[ProDashboardView] Error refreshing dashboard:', err);
+        } finally {
+            setIsRefreshing(false);
+            setLoadingEarnings(false);
+            setLoadingJobs(false);
+            spinAnimation.stop();
+        }
+    }, [user?.id, fetchEarnings, isRefreshing, spinAnim]);
 
     useEffect(() => {
-        const fetchDashboardData = async () => {
-            if (!user?.id) return;
-            try {
-                const [, tasksRes] = await Promise.allSettled([
-                    fetchEarnings(user.id, true),
-                    getWorkerTasksFromBackend(user.id),
-                ]);
-
-                if (tasksRes.status === 'fulfilled' && Array.isArray(tasksRes.value)) {
-                    const mapped = tasksRes.value.slice(0, 5).map((t) => ({
-                        id: t.id?.toString() || Math.random().toString(),
-                        title: t.subject || 'Service Task',
-                        address: t.body || 'Specified Location',
-                        amount: `Rs. ${t.price ? t.price.toLocaleString() : '0'}`,
-                        icon: t.status_id === 4 ? 'checkmark-circle' : t.status_id === 5 ? 'close-circle' : 'briefcase',
-                        color: t.status_id === 4 ? '#22C55E' : t.status_id === 5 ? '#EF4444' : '#3B82F6',
-                        status: t.status_id === 4 ? 'Done' : t.status_id === 5 ? 'Cancelled' : 'Active',
-                    }));
-                    setRecentJobs(mapped);
-                }
-            } catch (err) {
-                console.error('[ProDashboardView] Error fetching dashboard data:', err);
-            } finally {
-                setLoadingEarnings(false);
-                setLoadingJobs(false);
-            }
-        };
-        fetchDashboardData();
+        refreshDashboard();
     }, [user?.id]);
+
+    const spin = spinAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '360deg'],
+    });
 
     const initials = user?.displayName
         ? user.displayName.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
@@ -190,6 +219,14 @@ export default function ProDashboardView() {
                 style={styles.scroll}
                 contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
                 showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={refreshDashboard}
+                        colors={[Colors.pro.accent]}
+                        tintColor={Colors.pro.accent}
+                    />
+                }
             >
                 {/* Sync & Cache Indicator Bar */}
                 <View style={{
@@ -211,13 +248,14 @@ export default function ProDashboardView() {
                         </Text>
                     </View>
                     <Pressable
-                        onPress={() => {
-                            if (user?.id) fetchEarnings(user.id, true);
-                        }}
-                        hitSlop={8}
+                        onPress={refreshDashboard}
+                        disabled={isRefreshing}
+                        hitSlop={12}
                         style={{ paddingLeft: 8 }}
                     >
-                        <Ionicons name="refresh" size={16} color={Colors.pro.accent} />
+                        <Animated.View style={{ transform: [{ rotate: isRefreshing ? spin : '0deg' }] }}>
+                            <Ionicons name="refresh" size={18} color={isRefreshing ? Colors.neutral[400] : Colors.pro.accent} />
+                        </Animated.View>
                     </Pressable>
                 </View>
 
