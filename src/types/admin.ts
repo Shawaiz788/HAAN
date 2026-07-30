@@ -76,9 +76,16 @@ export interface AdminEarningItem {
 export interface AdminAttachmentItem {
   id: number;
   task_id?: number;
-  file_url: string;
+  task?: number;
+  file_url?: string;
+  file?: string;
+  url?: string;
+  image?: string;
+  attachment?: { file?: string; url?: string };
   file_name?: string;
+  name?: string;
   uploaded_at?: string;
+  created_at?: string;
   file_size?: number;
 }
 
