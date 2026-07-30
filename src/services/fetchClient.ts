@@ -29,8 +29,13 @@ export const fetchWithTimeout = async (url: string, options: RequestInit = {}): 
     }
 };
 
+export interface TokenRefreshResult {
+    access: string;
+    refresh?: string;
+}
+
 // Helper to request a new access token from the backend refresh token endpoint
-export const refreshAccessToken = async (refreshToken: string): Promise<string> => {
+export const refreshAccessToken = async (refreshToken: string): Promise<TokenRefreshResult> => {
     const url = `${API_URL}/app/token/refresh/`;
     logger.log('[fetchClient] Refreshing access token via URL:', url);
     const response = await fetch(url, {
@@ -49,35 +54,73 @@ export const refreshAccessToken = async (refreshToken: string): Promise<string> 
     try {
         const data = JSON.parse(responseText);
         const newAccessToken = data.access || data.access_token || data.token;
+        const newRefreshToken = data.refresh || data.refresh_token;
         if (!newAccessToken) {
             throw new Error('No access token returned from refresh API');
         }
-        return newAccessToken;
-    } catch (e) {
+        return { access: newAccessToken, refresh: newRefreshToken };
+    } catch (e: any) {
         throw new Error(`Failed to parse token refresh response. Content: ${responseText}`);
     }
 };
 
+let activeRefreshPromise: Promise<string> | null = null;
+
 /**
  * Refreshes the access token, persists it to SecureStore, and syncs the user session.
  * Shared by proactive (30-min) and reactive (401) refresh flows.
+ * Uses a single-flight mutex pattern to prevent parallel refresh stampedes on startup.
  */
 const refreshAndPersistToken = async (refreshToken: string): Promise<string> => {
-    const newAccessToken = await refreshAccessToken(refreshToken);
-    const now = Date.now();
-
-    await SecureStore.setItemAsync('user_token', newAccessToken);
-    await SecureStore.setItemAsync('user_token_saved_at', now.toString());
-
-    // Keep the user_session payload synchronized
-    const sessionStr = await SecureStore.getItemAsync('user_session');
-    if (sessionStr) {
-        const sessionUser = JSON.parse(sessionStr);
-        sessionUser.token = newAccessToken;
-        await SecureStore.setItemAsync('user_session', JSON.stringify(sessionUser));
+    if (activeRefreshPromise) {
+        logger.log('[fetchClient] Refresh already in-flight. Awaiting existing refresh promise...');
+        return activeRefreshPromise;
     }
 
-    return newAccessToken;
+    activeRefreshPromise = (async () => {
+        try {
+            // Check if token was refreshed very recently (within 10 seconds) by another flow
+            const savedAtStr = await SecureStore.getItemAsync('user_token_saved_at');
+            if (savedAtStr) {
+                const savedAt = parseInt(savedAtStr, 10);
+                if (Date.now() - savedAt < 10000) {
+                    const existingToken = await SecureStore.getItemAsync('user_token');
+                    if (existingToken) {
+                        logger.log('[fetchClient] Token was recently refreshed. Reusing stored token.');
+                        return existingToken;
+                    }
+                }
+            }
+
+            const currentRefreshToken = (await SecureStore.getItemAsync('user_refresh_token')) || refreshToken;
+            const { access, refresh } = await refreshAccessToken(currentRefreshToken);
+            const now = Date.now();
+
+            await SecureStore.setItemAsync('user_token', access);
+            await SecureStore.setItemAsync('user_token_saved_at', now.toString());
+
+            if (refresh) {
+                await SecureStore.setItemAsync('user_refresh_token', refresh);
+            }
+
+            // Keep the user_session payload synchronized
+            const sessionStr = await SecureStore.getItemAsync('user_session');
+            if (sessionStr) {
+                const sessionUser = JSON.parse(sessionStr);
+                sessionUser.token = access;
+                if (refresh) {
+                    sessionUser.refreshToken = refresh;
+                }
+                await SecureStore.setItemAsync('user_session', JSON.stringify(sessionUser));
+            }
+
+            return access;
+        } finally {
+            activeRefreshPromise = null;
+        }
+    })();
+
+    return activeRefreshPromise;
 };
 
 // Helper to construct Authorization header using JWT token from SecureStore (with automatic background refresh)
@@ -86,12 +129,12 @@ export const getAuthHeaders = async (extraHeaders: Record<string, string> = {}):
     const savedAtStr = await SecureStore.getItemAsync('user_token_saved_at');
     const refreshToken = await SecureStore.getItemAsync('user_refresh_token');
 
-    if (token && savedAtStr && refreshToken) {
+    if (savedAtStr && refreshToken) {
         const savedAt = parseInt(savedAtStr, 10);
         const now = Date.now();
         const thirtyMinutes = 30 * 60 * 1000;
 
-        if (now - savedAt > thirtyMinutes) {
+        if (!token || now - savedAt > thirtyMinutes) {
             logger.log('[fetchClient] JWT access token is older than 30 minutes. Triggering refresh...');
             try {
                 token = await refreshAndPersistToken(refreshToken);
@@ -102,8 +145,10 @@ export const getAuthHeaders = async (extraHeaders: Record<string, string> = {}):
     }
 
     const headers: Record<string, string> = { ...extraHeaders };
-    if (token && !headers['Authorization']) {
-        headers['Authorization'] = `Bearer ${token}`;
+    if (token) {
+        if (!headers['Authorization'] || headers['Authorization'].startsWith('Bearer ')) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
     }
     return headers;
 };
@@ -160,3 +205,4 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}): Pro
 
     return response;
 };
+
