@@ -1,6 +1,6 @@
 # 📚 KaamKarwao - Architecture Documentation Portal
 
-Welcome to the modular documentation portal for KaamKarwao. This directory contains detailed reference guides for every **Context Provider**, **Custom Hook**, and **Utility Module** in the codebase.
+Welcome to the modular documentation portal for KaamKarwao. This directory contains detailed reference guides for every **Context Provider**, **Custom Hook**, **Zustand Store**, **Core Service**, **Utility Module**, and **Architecture System** in the codebase.
 
 ---
 
@@ -9,6 +9,24 @@ Welcome to the modular documentation portal for KaamKarwao. This directory conta
 ### 🧠 Context Providers (`docs/context/`)
 - [AuthContext & useAuth](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/context/auth.md) — User authentication, JWT refresh rotation, Firebase OTP, and session persistence.
 - [PostJobContext & usePostJob](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/context/post-job.md) — Customer task creation, backend task syncing, live status tracking, bid acceptance, and task cancellation.
+
+---
+
+### 💾 Zustand Global Stores (`docs/stores/`)
+- [taskStore](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/stores/taskStore.md) — Active task state, task history, MMKV offline persistence, and multi-user switching.
+- [proEarningsStore](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/stores/proEarningsStore.md) — Worker earnings state and TTL-based cache management.
+- [proOnlineStore](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/stores/proOnlineStore.md) — Professional online/offline state and MMKV persistence.
+- [biddingStore](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/stores/biddingStore.md) — Bid list state, sorting, and bid modal control.
+
+---
+
+### 🌐 Core Services (`docs/services/`)
+- [fetchClient](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/services/fetchClient.md) — Single-flight mutex token refresh, rotated refresh token persistence in Expo `SecureStore`, and Bearer header synchronization.
+- [geofenceService](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/services/geofenceService.md) — Real-world polygon boundary definitions (Bahria Town, DHA, Model Town, Johar Town, etc.) and coordinate validation math.
+- [agoraService](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/services/agoraService.md) — Agora RTC token fetching, voice channel initialization, and audio profile configuration.
+- [notificationService](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/services/notificationService.md) — Expo push notification setup and local alert triggers.
+- [task Service](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/services/task.md) — Task creation chain, multipart attachment uploading, and task CRUD endpoints.
+- [user Service](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/services/user.md) — User profile REST endpoints, current user profile fetching, and user reviews.
 
 ---
 
@@ -23,6 +41,11 @@ Welcome to the modular documentation portal for KaamKarwao. This directory conta
 - [useRouteByUserType](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/hooks/useRouteByUserType.md) — Automatic role-based routing hook (Customer, Pro, Admin).
 - [useTaskChatWebSocket](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/hooks/useTaskChatWebSocket.md) — Real-time task chat WebSocket, attachment transmission, and dual-channel VoIP signaling.
 - [useAdminDashboard](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/hooks/useAdminDashboard.md) — Admin dashboard metrics, tasks, categories, and city/area query hook via TanStack Query.
+
+---
+
+### 🏗️ Architecture System Guides (`docs/architecture/`)
+- [VoIP Voice Calling & WebSocket Architecture](file:///c:/Users/Fahad/Documents/KaamKarwao/docs/architecture/VOIP_AND_WEBSOCKETS.md) — Dual-channel signaling (`[VOICE_CALL_SIGNAL:...]` fallback + JSON events) and Agora RTC voice call state machine.
 
 ---
 
