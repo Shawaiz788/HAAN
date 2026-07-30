@@ -49,18 +49,16 @@ export function AgoraVoipCallModal({
 }: AgoraVoipCallModalProps) {
   const insets = useSafeAreaInsets();
   const [isMuted, setIsMuted] = useState(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
   const [callStatus, setCallStatus] = useState<'calling' | 'connected' | 'ended' | 'declined'>(initialStatus);
-  const [durationSeconds, setDurationSeconds] = useState(0);
   const [remoteUid, setRemoteUid] = useState(0);
 
   const engineRef = useRef<IRtcEngine | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const channelName = `kaamkarwao_task_${taskId || 'live'}`;
 
-  // Sync initialStatus when prop changes (e.g. remote accepted -> 'connected')
+  // Sync initialStatus when prop changes
   useEffect(() => {
     if (visible && initialStatus) {
       setCallStatus(initialStatus);
@@ -72,7 +70,7 @@ export function AgoraVoipCallModal({
     if (!visible) return;
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.15, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.12, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
@@ -80,23 +78,12 @@ export function AgoraVoipCallModal({
     return () => pulse.stop();
   }, [visible, pulseAnim]);
 
-  // Duration timer - only when connected
-  useEffect(() => {
-    if (visible && callStatus === 'connected') {
-      timerRef.current = setInterval(() => setDurationSeconds(s => s + 1), 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [visible, callStatus]);
-
   // Reset state on open
   useEffect(() => {
     if (visible) {
       setCallStatus(initialStatus);
-      setDurationSeconds(0);
       setIsMuted(false);
-      setIsSpeakerOn(true);
+      setIsSpeakerOn(false);
       setRemoteUid(0);
     }
   }, [visible, initialStatus]);
@@ -140,7 +127,7 @@ export function AgoraVoipCallModal({
           onJoinChannelSuccess: (_connection: RtcConnection) => {
             if (!isActive) return;
             logger.log('[AgoraVoip] Joined channel successfully:', targetChannel, 'as UID:', currentUserId);
-            setCallStatus('connected');
+            // Local user connected to channel - wait for remote user to join before showing 'connected'
           },
           onUserJoined: (_connection: RtcConnection, uid: number) => {
             if (!isActive) return;
@@ -162,6 +149,7 @@ export function AgoraVoipCallModal({
         engine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
         engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
         engine.enableAudio();
+        engine.setEnableSpeakerphone(false);
 
         logger.log('[AgoraVoip] Joining channel:', targetChannel, 'with UID:', currentUserId);
         engine.joinChannel(tokenData.token, targetChannel, currentUserId, {
@@ -216,77 +204,98 @@ export function AgoraVoipCallModal({
     engineRef.current?.setEnableSpeakerphone(next);
   };
 
-  const formatDuration = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
   const initials = (otherUserName || 'User').charAt(0).toUpperCase();
   const hasAvatar = Boolean(otherUserAvatar && otherUserAvatar.trim().length > 0);
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={handleEndCall}>
-      <StatusBar barStyle="light-content" backgroundColor="#09101D" />
-      <View style={[styles.modalContainer, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 20 }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>In-App Voice Call</Text>
-          <Pressable onPress={handleEndCall} style={styles.minimizeBtn} hitSlop={10}>
-            <Ionicons name="chevron-down" size={24} color="#FFFFFF" />
-          </Pressable>
-        </View>
-
-        {/* Profile Section */}
-        <View style={styles.profileSection}>
-          <Animated.View style={[styles.avatarRingOuter, { transform: [{ scale: pulseAnim }] }]}>
-            <View style={styles.avatarRingInner}>
-              {hasAvatar ? (
-                <Image source={{ uri: otherUserAvatar }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarInitials}>{initials}</Text>
-                </View>
-              )}
-            </View>
-          </Animated.View>
-
-          <Text style={styles.userName}>{otherUserName}</Text>
-          <Text style={styles.callStatusText}>
-            {callStatus === 'calling'
-              ? `Ringing ${otherUserName}...`
-              : callStatus === 'connected'
-                ? 'In-App Encrypted HD Audio'
-                : callStatus === 'declined'
-                  ? 'Call Declined'
-                  : 'Call Ended'}
-          </Text>
-          {callStatus === 'connected' && (
-            <Text style={styles.timerText}>{formatDuration(durationSeconds)}</Text>
-          )}
-        </View>
-
-        {/* Controls */}
-        <View style={styles.controlsContainer}>
-          {/* Mute Button */}
-          <View style={{ alignItems: 'center' }}>
-            <Pressable style={[styles.controlButton, isMuted && styles.controlButtonActive]} onPress={toggleMute}>
-              <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={28} color={isMuted ? '#09101D' : '#FFFFFF'} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <View style={styles.modalContainer}>
+        <View style={[styles.contentContainer, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 20 }]}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Pressable onPress={handleEndCall} style={styles.minimizeBtn} hitSlop={10}>
+              <Ionicons name="chevron-down" size={22} color="#374151" />
             </Pressable>
-            <Text style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</Text>
+
+            <View style={styles.brandHeaderPill}>
+              <Ionicons name="shield-checkmark" size={14} color="#10B981" />
+              <Text style={styles.headerTitle}>KaamKarwao Voice Call</Text>
+            </View>
+
+            {taskId ? (
+              <View style={styles.taskBadge}>
+                <Text style={styles.taskBadgeText}>Task #{taskId}</Text>
+              </View>
+            ) : (
+              <View style={{ width: 38 }} />
+            )}
           </View>
 
-          {/* End Call Button */}
-          <Pressable style={styles.endCallButton} onPress={handleEndCall}>
-            <Ionicons name="call" size={32} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
-          </Pressable>
+          {/* Profile Section */}
+          <View style={styles.profileSection}>
+            <Animated.View style={[styles.avatarRingOuter, { transform: [{ scale: pulseAnim }] }]}>
+              <View style={styles.avatarRingInner}>
+                {hasAvatar ? (
+                  <Image source={{ uri: otherUserAvatar }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Text style={styles.avatarInitials}>{initials}</Text>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
 
-          {/* Speaker Button */}
-          <View style={{ alignItems: 'center' }}>
-            <Pressable style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]} onPress={toggleSpeaker}>
-              <Ionicons name={isSpeakerOn ? 'volume-high' : 'volume-medium'} size={28} color={isSpeakerOn ? '#09101D' : '#FFFFFF'} />
-            </Pressable>
-            <Text style={styles.controlLabel}>Speaker</Text>
+            <Text style={styles.userName}>{otherUserName}</Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>{role === 'pro' ? 'Professional Provider' : 'Customer'}</Text>
+            </View>
+
+            <View style={styles.statusPill}>
+              <View style={styles.statusDot} />
+              <Text style={styles.callStatusText}>
+                {callStatus === 'calling'
+                  ? `Ringing ${otherUserName}...`
+                  : callStatus === 'connected'
+                    ? 'In-App Encrypted HD Audio'
+                    : callStatus === 'declined'
+                      ? 'Call Declined'
+                      : 'Call Ended'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Controls Bar - Perfectly Aligned Columns */}
+          <View style={styles.controlsCard}>
+            {/* Mute Column */}
+            <View style={styles.controlCol}>
+              <Pressable
+                style={[styles.controlButton, isMuted && styles.controlButtonMuted]}
+                onPress={toggleMute}
+              >
+                <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={26} color={isMuted ? '#FFFFFF' : '#374151'} />
+              </Pressable>
+              <Text style={styles.controlLabel}>{isMuted ? 'Muted' : 'Mute'}</Text>
+            </View>
+
+            {/* End Call Column */}
+            <View style={styles.controlCol}>
+              <Pressable style={styles.endCallButton} onPress={handleEndCall}>
+                <Ionicons name="call" size={28} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
+              </Pressable>
+              <Text style={styles.controlLabel}>End</Text>
+            </View>
+
+            {/* Speaker Column */}
+            <View style={styles.controlCol}>
+              <Pressable
+                style={[styles.controlButton, isSpeakerOn && styles.controlButtonSpeakerOn]}
+                onPress={toggleSpeaker}
+              >
+                <Ionicons name={isSpeakerOn ? 'volume-high' : 'volume-medium'} size={26} color={isSpeakerOn ? '#FFFFFF' : '#374151'} />
+              </Pressable>
+              <Text style={styles.controlLabel}>Speaker</Text>
+            </View>
           </View>
         </View>
       </View>

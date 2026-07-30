@@ -43,14 +43,14 @@ export function IncomingCallModal({
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.2,
-          duration: 800,
+          toValue: 1.12,
+          duration: 900,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 800,
+          duration: 900,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
@@ -67,48 +67,59 @@ export function IncomingCallModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onDecline}>
-      <StatusBar barStyle="light-content" backgroundColor="#09101D" />
-      <View style={[styles.container, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 40 }]}>
-        {/* Ringing Label */}
-        <View style={styles.topSection}>
-          <Ionicons name="call" size={24} color="#10B981" style={{ marginBottom: 8 }} />
-          <Text style={styles.incomingTitle}>Incoming Voice Call...</Text>
-          <Text style={styles.taskLabel}>Task #{callData.taskId}</Text>
-        </View>
-
-        {/* Pulsing Avatar */}
-        <View style={styles.avatarSection}>
-          <Animated.View style={[styles.ringOuter, { transform: [{ scale: pulseAnim }] }]}>
-            <View style={styles.ringInner}>
-              {hasAvatar ? (
-                <Image source={{ uri: callData.callerAvatar }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarInitials}>{initials}</Text>
-                </View>
-              )}
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <View style={styles.modalContainer}>
+        <View style={[styles.contentContainer, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 30 }]}>
+          {/* Header Section */}
+          <View style={styles.topSection}>
+            <View style={styles.brandBadge}>
+              <Ionicons name="call" size={16} color="#10B981" />
+              <Text style={styles.brandBadgeText}>INCOMING VOICE CALL</Text>
             </View>
-          </Animated.View>
-          <Text style={styles.callerName}>{callData.callerName}</Text>
-          <Text style={styles.subText}>In-App Audio HD</Text>
-        </View>
-
-        {/* Action Buttons: Decline / Accept */}
-        <View style={styles.actionsRow}>
-          {/* Decline */}
-          <View style={{ alignItems: 'center' }}>
-            <Pressable style={styles.declineBtn} onPress={onDecline}>
-              <Ionicons name="call" size={32} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
-            </Pressable>
-            <Text style={styles.actionLabel}>Decline</Text>
+            <View style={styles.taskBadge}>
+              <Text style={styles.taskLabel}>Task #{callData.taskId}</Text>
+            </View>
           </View>
 
-          {/* Accept */}
-          <View style={{ alignItems: 'center' }}>
-            <Pressable style={styles.acceptBtn} onPress={onAccept}>
-              <Ionicons name="call" size={32} color="#FFFFFF" />
-            </Pressable>
-            <Text style={styles.actionLabel}>Accept</Text>
+          {/* Pulsing Avatar & Caller Info */}
+          <View style={styles.avatarSection}>
+            <Animated.View style={[styles.ringOuter, { transform: [{ scale: pulseAnim }] }]}>
+              <View style={styles.ringInner}>
+                {hasAvatar ? (
+                  <Image source={{ uri: callData.callerAvatar }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Text style={styles.avatarInitials}>{initials}</Text>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+
+            <Text style={styles.callerName}>{callData.callerName}</Text>
+
+            <View style={styles.hdStatusPill}>
+              <View style={styles.pulseDot} />
+              <Text style={styles.subText}>In-App Audio HD</Text>
+            </View>
+          </View>
+
+          {/* Action Buttons: Decline / Accept - Perfectly Aligned Columns */}
+          <View style={styles.actionsCard}>
+            {/* Decline Column */}
+            <View style={styles.actionCol}>
+              <Pressable style={styles.declineBtn} onPress={onDecline}>
+                <Ionicons name="call" size={28} color="#FFFFFF" style={{ transform: [{ rotate: '135deg' }] }} />
+              </Pressable>
+              <Text style={styles.actionLabel}>Decline</Text>
+            </View>
+
+            {/* Accept Column */}
+            <View style={styles.actionCol}>
+              <Pressable style={styles.acceptBtn} onPress={onAccept}>
+                <Ionicons name="call" size={28} color="#FFFFFF" />
+              </Pressable>
+              <Text style={styles.actionLabel}>Accept</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -117,104 +128,186 @@ export function IncomingCallModal({
 }
 
 const styles = StyleSheet.create({
-  container: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: '#09101D',
+    backgroundColor: '#FFFFFF',
+  },
+  contentContainer: {
+    flex: 1,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
+    backgroundColor: '#FFFFFF',
   },
   topSection: {
     alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
   },
-  incomingTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  brandBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 24,
+    gap: 8,
+  },
+  brandBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 1,
+  },
+  taskBadge: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 14,
   },
   taskLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
   },
   avatarSection: {
     alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
   },
   ringOuter: {
-    width: width * 0.52,
-    height: width * 0.52,
-    borderRadius: (width * 0.52) / 2,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    width: width * 0.54,
+    height: width * 0.54,
+    borderRadius: (width * 0.54) / 2,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
   },
   ringInner: {
-    width: width * 0.42,
-    height: width * 0.42,
-    borderRadius: (width * 0.42) / 2,
-    backgroundColor: 'rgba(16, 185, 129, 0.3)',
+    width: width * 0.44,
+    height: width * 0.44,
+    borderRadius: (width * 0.44) / 2,
+    backgroundColor: '#D1FAE5',
+    borderWidth: 1,
+    borderColor: '#6EE7B7',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarImage: {
-    width: width * 0.34,
-    height: width * 0.34,
-    borderRadius: (width * 0.34) / 2,
+    width: width * 0.36,
+    height: width * 0.36,
+    borderRadius: (width * 0.36) / 2,
+    borderWidth: 3,
+    borderColor: '#10B981',
   },
   avatarPlaceholder: {
-    width: width * 0.34,
-    height: width * 0.34,
-    borderRadius: (width * 0.34) / 2,
-    backgroundColor: '#059669',
+    width: width * 0.36,
+    height: width * 0.36,
+    borderRadius: (width * 0.36) / 2,
+    backgroundColor: '#10B981',
+    borderWidth: 3,
+    borderColor: '#059669',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitials: {
-    fontSize: 38,
-    fontWeight: '700',
+    fontSize: 44,
+    fontWeight: '800',
     color: '#FFFFFF',
   },
   callerName: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 6,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 10,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  hdStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 8,
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
   },
   subText: {
-    fontSize: 14,
-    color: '#10B981',
-    fontWeight: '600',
+    fontSize: 13,
+    color: '#059669',
+    fontWeight: '700',
   },
-  actionsRow: {
+  actionsCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 36,
+    paddingVertical: 20,
     paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  actionCol: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
   },
   declineBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#EF4444',
+    borderWidth: 2,
+    borderColor: '#FCA5A5',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 6,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
   acceptBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#A7F3D0',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 6,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
   actionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
     marginTop: 8,
   },
 });
