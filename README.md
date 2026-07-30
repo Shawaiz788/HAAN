@@ -13,7 +13,7 @@
 ### 🎥 KaamKarwao Demo Video
 
 <video
-  src="https://github.com/user-attachments/assets/ae363c29-7017-44c1-b0b6-7505cb8d7bcd"
+  src="https://github.com/user-attachments/assets/d7658c19-8bbb-4018-bfb3-346933f4a6a4"
   width="400"
   controls>
 </video>
