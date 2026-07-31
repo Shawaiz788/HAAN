@@ -29,12 +29,7 @@ module.exports = {
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       package: "com.shawaiz788.kaamkrwao",
-      googleServicesFile: "./google-services.json",
-      config: {
-        googleMaps: {
-          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ""
-        }
-      }
+      googleServicesFile: "./google-services.json"
     },
     web: {
       favicon: "./assets/favicon.png",

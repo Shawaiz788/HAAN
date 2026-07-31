@@ -10,7 +10,7 @@ import { USER_TYPE_ADMIN, USER_TYPE_PRO } from '@/constants/userTypes';
  * Routing logic:
  *   - No displayName → profile-setup (new user, incomplete profile)
  *   - usertype_id === USER_TYPE_ADMIN (1) → /(protected)/(admin)/dashboard
- *   - usertype_id === USER_TYPE_PRO (3) → /(protected)/(pro)/dashboard
+ *   - usertype_id === USER_TYPE_PRO (3) → /(protected)/(pro)/live-jobs
  *   - usertype_id === USER_TYPE_CLIENT (2) → /(protected)/(client)/home
  */
 export function useRouteByUserType() {

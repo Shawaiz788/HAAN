@@ -65,6 +65,7 @@ A premium, production-grade on-demand services marketplace built with **Expo SDK
 | **WebView + Leaflet** | ![Leaflet](https://img.shields.io/badge/Leaflet-WebView-10B981?style=for-the-badge&logo=leaflet&logoColor=white) | Instant-mount interactive maps with Nominatim search |
 | **react-native-agora** | ![Agora](https://img.shields.io/badge/Agora_RTC-v4.6.2-099DFD?style=for-the-badge&logo=agora&logoColor=white) | Native in-app VoIP voice calling SDK |
 | **Expo Image Picker** | ![Picker](https://img.shields.io/badge/Expo_Image_Picker-v16-4630EB?style=for-the-badge&logo=expo&logoColor=white) | Multi-media attachment selection |
+| **Java JDK 17** | ![Java](https://img.shields.io/badge/Java-JDK_17-007396?style=for-the-badge&logo=openjdk&logoColor=white) | Build compilation prerequisite for Expo SDK 54 / RN 0.81 (Eclipse Adoptium Temurin 17) |
 | **WebSocket** | ![WS](https://img.shields.io/badge/WebSocket-Realtime-22C55E?style=for-the-badge) | Live job feeds, bidding, task chat, and VoIP call signals |
 
 ---
@@ -344,11 +345,27 @@ graph TD
     I -->|"Admin (1)"| L["/(protected)/(admin)/dashboard"]
 ```
 
+### Centralized Navigation Hook (`useRouteByUserType`)
+
+Post-authentication and initial session routing is orchestrated by the `useRouteByUserType` custom hook ([useRouteByUserType.ts](file:///c:/Users/Fahad/Documents/KaamKarwao/src/hooks/useRouteByUserType.ts)). Rather than using ad-hoc `router.replace` calls spread across screens, `useRouteByUserType` encapsulates user-role routing rules:
+
+```typescript
+// Routing Decision Tree
+if (!user.displayName)               => router.replace('/(protected)/profile-setup')
+else if (user.usertype_id === 1)    => router.replace('/(protected)/(admin)/dashboard')  // Admin
+else if (user.usertype_id === 3)    => router.replace('/(protected)/(pro)/live-jobs')    // Professional
+else                                 => router.replace('/(protected)/(client)/home')      // Customer (2)
+```
+
+**Entry Point Integration:**
+- **App Launch (`src/app/index.tsx`)** — Automatically evaluates logged-in sessions on mount or when pressing "Get Started".
+- **Sign-In Screen (`src/app/(auth)/sign-in.tsx`)** — Executes after phone/password authentication and session synchronization.
+- **Profile Setup (`src/hooks/useProfileSubmit.ts`)** — Executes immediately after new user profile creation and location chain resolution.
+
 **Route Guards:**
-- `(protected)/_layout.tsx` — Redirects unauthenticated users to `/` and incomplete profiles to `/profile-setup`
-- `(pro)/_layout.tsx` — Verifies `usertype_id === USER_TYPE_PRO`, redirects others to client home
-- `(admin)/_layout.tsx` — Verifies `usertype_id === USER_TYPE_ADMIN`
-- `useRouteByUserType` hook — Centralized post-auth routing logic used by welcome screen and profile setup
+- `(protected)/_layout.tsx` — Redirects unauthenticated users (`!user`) to `/` and incomplete profiles (`!user.displayName`) to `/profile-setup`
+- `(pro)/_layout.tsx` — Verifies `usertype_id === USER_TYPE_PRO (3)`, redirecting non-professionals to client home
+- `(admin)/_layout.tsx` — Verifies `usertype_id === USER_TYPE_ADMIN (1)`, redirecting non-admins to client home
 
 ---
 
@@ -621,10 +638,11 @@ The customer home view incorporates a custom-engineered map and location managem
 ## 🚀 Running Locally
 
 ### Prerequisites
-- Node.js 18+
-- Expo CLI (`npx expo`)
-- Android Studio (for Android builds) or Xcode (for iOS)
-- A running backend API server
+- **Java Development Kit (JDK 17)**: [Eclipse Adoptium Temurin 17](https://adoptium.net/) (JDK 17 is strictly required for Expo SDK 54 / React Native 0.81 Android Gradle builds). Ensure `JAVA_HOME` environment variable points to your JDK 17 directory (e.g., `C:\Program Files\Eclipse Adoptium\jdk-17.x.x-hotspot`).
+- **Node.js**: v18.x or v20.x LTS
+- **Expo CLI**: (`npx expo`)
+- **Android Studio & SDK**: (For local Android compilation and emulator debugging) or **Xcode** (macOS only for iOS simulator)
+- **Backend API Server**: Active instance of the KaamKarwao REST API & WebSocket server
 
 ### 1. Install Dependencies
 ```bash
@@ -634,7 +652,12 @@ npm install
 ### 2. Environment Variables
 Create a `.env` file in the root directory (see `.env.example`):
 ```env
+# Backend REST API & WebSocket Base URL
 EXPO_PUBLIC_API_URL=https://your-api-domain.com/
+
+# Agora RTC Voice Calling Credentials
+EXPO_PUBLIC_AGORA_APP_ID=YOUR_AGORA_APP_ID_HERE
+EXPO_PUBLIC_AGORA_APP_CERTIFICATE=YOUR_AGORA_APP_CERTIFICATE_HERE
 ```
 
 ### 3. Firebase Configuration
@@ -678,8 +701,9 @@ npm run web        # Start web bundle
 
 | Variable | Required | Description |
 |---|---|---|
-| `EXPO_PUBLIC_API_URL` | ✅ | Backend API base URL (e.g., `https://api.kaamkarwao.com/`) |
-| `EXPO_PUBLIC_AGORA_APP_ID` | ✅ | Agora App ID for native VoIP voice calls |
+| `EXPO_PUBLIC_API_URL` | ✅ | Backend API base URL for REST endpoints & WebSocket connections (e.g., `https://api.kaamkarwao.com/`) |
+| `EXPO_PUBLIC_AGORA_APP_ID` | ✅ | Agora RTC App ID for native in-app VoIP voice calling |
+| `EXPO_PUBLIC_AGORA_APP_CERTIFICATE` | ✅ | Agora RTC App Certificate for RTC dynamic token authentication |
 
 
 ---
