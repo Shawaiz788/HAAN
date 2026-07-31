@@ -45,7 +45,7 @@ export const getLeafletHtml = (lat: number, lng: number) => `
           weight: 2,
           opacity: 0.15,
           fillColor: '#10B981',
-          fillOpacity: 0.05,
+          fillOpacity: 0.02,
           smoothFactor: 1.0
         }).addTo(map);
       }
