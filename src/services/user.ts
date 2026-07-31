@@ -89,7 +89,9 @@ export const loginUser = async (phone_number: string, password: string): Promise
         body: JSON.stringify({ phone_number, password }),
     });
     const responseText = await response.text();
-    logger.log('[loginUser API] Response Status:', response.status);
+    // logger.log('[loginUser API] Response Status:', response.status);
+    // logger.log('[loginUser API] Response Body:', responseText);
+
 
     if (!response.ok) {
         if (response.status === 400 || response.status === 401 || response.status === 403) {

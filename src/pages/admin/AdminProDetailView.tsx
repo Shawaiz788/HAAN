@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getUserProfile, verifyUserStatus, getUserRating } from '@/services/adminUsers';
-import { getWorkerEarnings } from '@/services/adminEarnings';
-import { getWorkerTasks } from '@/services/adminTasks';
-import { getCustomerReviews } from '@/services/adminReviews';
+import { useAdminProDetail, useVerifyUserStatus } from '@/hooks/admin/useAdminProDetail';
 import StatusBadge from '@/components/admin/common/StatusBadge';
 
 export default function AdminProDetailView() {
@@ -25,51 +22,16 @@ export default function AdminProDetailView() {
   const params = useLocalSearchParams();
   const userId = Number(params.id || 3);
 
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
-  const [isVerified, setIsVerified] = useState(false);
-  const [rating, setRating] = useState({ rating: 5.0, count: 0 });
-  const [earnings, setEarnings] = useState<any>(null);
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [verifying, setVerifying] = useState(false);
+  const { profile, rating, earnings, tasks, reviews, isLoading: loading } = useAdminProDetail(userId);
+  const verifyMutation = useVerifyUserStatus();
 
-  const loadProData = async () => {
-    try {
-      setLoading(true);
-      const [profData, ratData, earnData, taskData, revData] = await Promise.allSettled([
-        getUserProfile(userId),
-        getUserRating(userId),
-        getWorkerEarnings(userId),
-        getWorkerTasks(userId),
-        getCustomerReviews(userId),
-      ]);
-
-      if (profData.status === 'fulfilled') {
-        setProfile(profData.value);
-        setIsVerified(Boolean((profData.value as any)?.is_verified));
-      }
-      if (ratData.status === 'fulfilled') setRating(ratData.value);
-      if (earnData.status === 'fulfilled') setEarnings(earnData.value);
-      if (taskData.status === 'fulfilled') setTasks(taskData.value);
-      if (revData.status === 'fulfilled') setReviews(revData.value);
-    } catch (e) {
-      console.warn('[AdminProDetailView] Failed to load full pro detail:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadProData();
-  }, [userId]);
+  const isVerified = Boolean((profile as any)?.is_verified ?? profile?.verified);
+  const verifying = verifyMutation.isPending;
 
   const handleToggleVerification = async () => {
     try {
-      setVerifying(true);
       const newStatus = !isVerified;
-      await verifyUserStatus(userId, newStatus);
-      setIsVerified(newStatus);
+      await verifyMutation.mutateAsync({ userId, isVerified: newStatus });
       const msg = newStatus ? 'Professional Verified' : 'Verification Revoked';
       if (Platform.OS === 'android') {
         ToastAndroid.show(msg, ToastAndroid.SHORT);
@@ -78,8 +40,6 @@ export default function AdminProDetailView() {
       }
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not update verification status.');
-    } finally {
-      setVerifying(false);
     }
   };
 
@@ -122,7 +82,7 @@ export default function AdminProDetailView() {
                 ) : null}
               </View>
               <Text style={styles.proEmail}>{profile?.email || 'N/A'}</Text>
-              <Text style={styles.proPhone}>{profile?.phone_number || 'N/A'}</Text>
+              <Text style={styles.proPhone}>{(profile as any)?.phone_number || profile?.phone || 'N/A'}</Text>
             </View>
           </View>
 

@@ -23,7 +23,7 @@ import EmptyState from '@/components/admin/common/EmptyState';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
 import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
 import TaskDetailModal from '@/components/admin/TaskDetailModal';
-import { getAllTasks, deleteTask } from '@/services/adminTasks';
+import { useAdminTasks, useDeleteAdminTask } from '@/hooks/admin/useAdminTasks';
 import { BackendTask } from '@/types';
 
 const STATUS_FILTERS = [
@@ -40,47 +40,27 @@ export default function AdminTasksView() {
   const { user } = useAuth();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [tasks, setTasks] = useState<BackendTask[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<number | 'all'>('all');
   const [selectedTask, setSelectedTask] = useState<BackendTask | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-
-  // Confirm delete dialog state
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  const fetchTasks = async () => {
-    try {
-      setLoading(true);
-      const data = await getAllTasks();
-      setTasks(data);
-    } catch (e) {
-      console.warn('[AdminTasksView] Error loading tasks:', e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const { data: tasks = [], isLoading, isRefetching, refetch } = useAdminTasks();
+  const deleteTaskMutation = useDeleteAdminTask();
+
+  const fetchTasks = () => {
+    refetch();
   };
 
-  useEffect(() => {
-    fetchTasks();
-  }, []);
-
-  const handleStatusChange = (taskId: number, newStatusId: number) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status_id: newStatusId } : t))
-    );
+  const handleStatusChange = () => {
+    refetch();
   };
 
   const confirmDeleteTask = async () => {
     if (!deleteId) return;
     try {
-      setDeleting(true);
-      await deleteTask(deleteId);
-      setTasks((prev) => prev.filter((t) => t.id !== deleteId));
+      await deleteTaskMutation.mutateAsync(deleteId);
       if (Platform.OS === 'android') {
         ToastAndroid.show('Task deleted successfully', ToastAndroid.SHORT);
       } else {
@@ -89,7 +69,6 @@ export default function AdminTasksView() {
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not delete task.');
     } finally {
-      setDeleting(false);
       setDeleteId(null);
     }
   };
@@ -148,16 +127,13 @@ export default function AdminTasksView() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchTasks();
-            }}
+            refreshing={isRefetching}
+            onRefresh={() => fetchTasks()}
             tintColor="#0B5A3E"
           />
         }
       >
-        {loading && !refreshing ? (
+        {isLoading && !isRefetching ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#0B5A3E" />
             <Text style={styles.loadingText}>Fetching tasks...</Text>
@@ -236,7 +212,7 @@ export default function AdminTasksView() {
         message="Are you sure you want to delete this task? This operation cannot be undone."
         confirmLabel="Delete"
         isDestructive
-        isLoading={deleting}
+        isLoading={deleteTaskMutation.isPending}
         onConfirm={confirmDeleteTask}
         onCancel={() => setDeleteId(null)}
       />

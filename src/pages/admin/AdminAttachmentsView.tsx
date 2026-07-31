@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import SearchBar from '@/components/admin/common/SearchBar';
 import EmptyState from '@/components/admin/common/EmptyState';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
 import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
-import { getAllAttachments, deleteAttachment } from '@/services/attachment';
+import { useAdminAttachments, useDeleteAdminAttachment } from '@/hooks/admin/useAdminAttachments';
 import { AdminAttachmentItem } from '@/types/admin';
 import { normalizeImageUrl } from '@/services/customer';
 
@@ -30,17 +30,14 @@ export default function AdminAttachmentsView() {
   const { user } = useAuth();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [attachments, setAttachments] = useState<AdminAttachmentItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  // Full-screen Image Preview Modal State
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>('');
+
+  const { data: attachments = [], isLoading, isRefetching, refetch } = useAdminAttachments();
+  const deleteAttachmentMutation = useDeleteAdminAttachment();
 
   const resolveAttachmentUrl = (item: AdminAttachmentItem): string => {
     const rawUrl =
@@ -70,33 +67,10 @@ export default function AdminAttachmentsView() {
     return `Attachment #${item.id}`;
   };
 
-  const fetchAttachments = async () => {
-    try {
-      setLoading(true);
-      const data = await getAllAttachments();
-      setAttachments(data);
-    } catch (e) {
-      console.warn('[AdminAttachmentsView] Error fetching attachments:', e);
-      setAttachments([
-        { id: 1, task_id: 101, file_url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500', file_name: 'pipe_leak.jpg', uploaded_at: 'Today' },
-        { id: 2, task_id: 102, file_url: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=500', file_name: 'breaker_box.jpg', uploaded_at: 'Yesterday' },
-      ]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAttachments();
-  }, []);
-
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
-      setDeleting(true);
-      await deleteAttachment(deleteId);
-      setAttachments((prev) => prev.filter((a) => a.id !== deleteId));
+      await deleteAttachmentMutation.mutateAsync(deleteId);
       if (Platform.OS === 'android') {
         ToastAndroid.show('Attachment deleted', ToastAndroid.SHORT);
       } else {
@@ -105,7 +79,6 @@ export default function AdminAttachmentsView() {
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not delete attachment.');
     } finally {
-      setDeleting(false);
       setDeleteId(null);
     }
   };
@@ -137,17 +110,19 @@ export default function AdminAttachmentsView() {
   return (
     <View style={styles.container}>
       <AdminHeader
-        title="Attachments & Media"
-        subtitle={`Task File Attachments (${filtered.length})`}
+        title="Task Attachments"
+        subtitle={`User Uploaded Media Files (${filtered.length})`}
         onOpenDrawer={() => setDrawerOpen(true)}
         user={user}
       />
+
+      <AdminDrawerPanel isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} activeRoute="attachments" />
 
       <View style={{ paddingHorizontal: 16, paddingTop: 14 }}>
         <SearchBar
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search by file name or Task ID..."
+          placeholder="Search by filename, task ID, attachment ID..."
         />
       </View>
 
@@ -157,16 +132,13 @@ export default function AdminAttachmentsView() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchAttachments();
-            }}
+            refreshing={isRefetching}
+            onRefresh={() => refetch()}
             tintColor="#0B5A3E"
           />
         }
       >
-        {loading && !refreshing ? (
+        {isLoading && !isRefetching ? (
           <View style={{ gap: 10 }}>
             {[1, 2, 3, 4, 5].map((i) => (
               <SkeletonCard key={i} />
@@ -201,19 +173,12 @@ export default function AdminAttachmentsView() {
 
                 <View style={styles.textCol}>
                   <Text style={styles.fileName}>{fileName}</Text>
-                  <Text style={styles.taskTag}>Linked to Task #{taskId}</Text>
+                  <Text style={styles.taskTag}>Task ID: #{taskId}</Text>
                   <Text style={styles.uploadMeta}>Uploaded: {uploadedAt}</Text>
                 </View>
 
-                <Pressable
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setDeleteId(item.id);
-                  }}
-                  style={styles.deleteBtn}
-                  hitSlop={8}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                <Pressable style={styles.deleteBtn} onPress={() => setDeleteId(item.id)} hitSlop={10}>
+                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
                 </Pressable>
               </Pressable>
             );
@@ -256,15 +221,9 @@ export default function AdminAttachmentsView() {
         message="Are you sure you want to permanently delete this media file?"
         confirmLabel="Delete"
         isDestructive
-        isLoading={deleting}
+        isLoading={deleteAttachmentMutation.isPending}
         onConfirm={handleDelete}
         onCancel={() => setDeleteId(null)}
-      />
-
-      <AdminDrawerPanel
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        activeRoute="attachments"
       />
     </View>
   );

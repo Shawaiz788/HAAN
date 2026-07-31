@@ -19,7 +19,7 @@ import SearchBar from '@/components/admin/common/SearchBar';
 import EmptyState from '@/components/admin/common/EmptyState';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
 import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
-import { getAllReviews, deleteReview } from '@/services/adminReviews';
+import { useAdminReviews, useDeleteAdminReview } from '@/hooks/admin/useAdminReviews';
 import { AdminReviewItem } from '@/types/admin';
 
 export default function AdminReviewsView() {
@@ -27,42 +27,20 @@ export default function AdminReviewsView() {
   const { user } = useAuth();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [reviews, setReviews] = useState<AdminReviewItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  const fetchReviews = async () => {
-    try {
-      setLoading(true);
-      const data = await getAllReviews();
-      setReviews(data);
-    } catch (e) {
-      console.warn('[AdminReviewsView] Could not load reviews:', e);
-      // Fallback mock if backend empty
-      setReviews([
-        { id: 1, user_id: 3, given_by: 2, user_name: 'Zara Worker', given_by_name: 'Ali Khan', body: 'Excellent plumbing work done on time!', rating: 5.0, task_id: 101, created_at: 'Yesterday' },
-        { id: 2, user_id: 5, given_by: 4, user_name: 'Usman Electrician', given_by_name: 'Hassan Ahmed', body: 'Great electrical fixing.', rating: 4.5, task_id: 102, created_at: '22 Jul 2026' },
-      ]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const { data: reviews = [], isLoading, isRefetching, refetch } = useAdminReviews();
+  const deleteReviewMutation = useDeleteAdminReview();
+
+  const fetchReviews = () => {
+    refetch();
   };
-
-  useEffect(() => {
-    fetchReviews();
-  }, []);
 
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
-      setDeleting(true);
-      await deleteReview(deleteId);
-      setReviews((prev) => prev.filter((r) => r.id !== deleteId));
+      await deleteReviewMutation.mutateAsync(deleteId);
       if (Platform.OS === 'android') {
         ToastAndroid.show('Review deleted', ToastAndroid.SHORT);
       } else {
@@ -71,7 +49,6 @@ export default function AdminReviewsView() {
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not delete review.');
     } finally {
-      setDeleting(false);
       setDeleteId(null);
     }
   };
@@ -105,16 +82,13 @@ export default function AdminReviewsView() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchReviews();
-            }}
+            refreshing={isRefetching}
+            onRefresh={() => fetchReviews()}
             tintColor="#0B5A3E"
           />
         }
       >
-        {loading && !refreshing ? (
+        {isLoading && !isRefetching ? (
           <View style={{ gap: 10 }}>
             {[1, 2, 3, 4, 5].map((i) => (
               <SkeletonCard key={i} />
@@ -158,7 +132,7 @@ export default function AdminReviewsView() {
         message="Are you sure you want to remove this review?"
         confirmLabel="Delete"
         isDestructive
-        isLoading={deleting}
+        isLoading={deleteReviewMutation.isPending}
         onConfirm={handleDelete}
         onCancel={() => setDeleteId(null)}
       />

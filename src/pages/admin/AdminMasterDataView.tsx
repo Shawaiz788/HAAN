@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,13 @@ import EmptyState from '@/components/admin/common/EmptyState';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
 import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
 import { masterDataService } from '@/services/masterData';
+import {
+  useMasterDataList,
+  useCreateMasterDataItem,
+  useUpdateMasterDataItem,
+  useDeleteMasterDataItem,
+  MasterDataEndpoint,
+} from '@/hooks/admin/useAdminMasterData';
 import { styles } from '@/styles/adminMasterDataView.styles';
 
 type MasterDomain =
@@ -52,25 +59,31 @@ const DOMAIN_OPTIONS: DomainOption[] = [
   { id: 'configs', label: 'Configuration', icon: 'options' },
 ];
 
+const DOMAIN_TO_ENDPOINT: Record<MasterDomain, MasterDataEndpoint> = {
+  countries: 'country',
+  cities: 'city',
+  areas: 'area',
+  locations: 'location',
+  usertypes: 'usertype',
+  paymentprefs: 'paymentpref',
+  statuses: 'status',
+  configs: 'config',
+};
+
 export default function AdminMasterDataView() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeDomain, setActiveDomain] = useState<MasterDomain>('countries');
-  const activeDomainRef = useRef<MasterDomain>(activeDomain);
-
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Keep ref in sync with activeDomain
-  useEffect(() => {
-    activeDomainRef.current = activeDomain;
-  }, [activeDomain]);
+  const endpoint = DOMAIN_TO_ENDPOINT[activeDomain];
+  const { data: items = [], isLoading: loading, isRefetching: refreshing, refetch } = useMasterDataList(endpoint);
+  const createItemMutation = useCreateMasterDataItem(endpoint);
+  const updateItemMutation = useUpdateMasterDataItem(endpoint);
+  const deleteItemMutation = useDeleteMasterDataItem(endpoint);
 
-  // Add/Edit modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [nameInput, setNameInput] = useState('');
@@ -78,7 +91,6 @@ export default function AdminMasterDataView() {
   const [citiesList, setCitiesList] = useState<any[]>([]);
   const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
 
-  // Load cities list for city selector in Area modal
   useEffect(() => {
     masterDataService
       .getCities()
@@ -86,44 +98,7 @@ export default function AdminMasterDataView() {
       .catch(() => { });
   }, []);
 
-  // Delete dialog state
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  const fetchDomainItems = async (domain: MasterDomain) => {
-    try {
-      setLoading(true);
-      setItems([]);
-      let data: any[] = [];
-      if (domain === 'countries') data = await masterDataService.getCountries();
-      else if (domain === 'cities') data = await masterDataService.getCities();
-      else if (domain === 'areas') data = await masterDataService.getAreas();
-      else if (domain === 'locations') data = await masterDataService.getLocations();
-      else if (domain === 'usertypes') data = await masterDataService.getUserTypes();
-      else if (domain === 'paymentprefs') data = await masterDataService.getPaymentPrefs();
-      else if (domain === 'statuses') data = await masterDataService.getStatuses();
-      else if (domain === 'configs') data = await masterDataService.getConfigs();
-
-      // Ignore out-of-order responses if user switched tabs during fetch
-      if (activeDomainRef.current === domain) {
-        setItems(data);
-      }
-    } catch (e) {
-      console.warn(`[AdminMasterDataView] Error fetching ${domain}:`, e);
-      if (activeDomainRef.current === domain) {
-        setItems([]);
-      }
-    } finally {
-      if (activeDomainRef.current === domain) {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    }
-  };
-
-  useEffect(() => {
-    fetchDomainItems(activeDomain);
-  }, [activeDomain]);
 
   const handleOpenAddModal = () => {
     setEditItem(null);
@@ -149,15 +124,15 @@ export default function AdminMasterDataView() {
 
   const handleSaveItem = async () => {
     if (!nameInput.trim()) {
-      Alert.alert('Required', 'Please enter a valid name/title.');
+      Alert.alert('Validation Error', 'Name / Key field cannot be empty.');
       return;
     }
     try {
       setSaving(true);
-      let payload: any = { name: nameInput.trim(), key: nameInput.trim() };
+      let payload: any = { name: nameInput.trim() };
       if (activeDomain === 'areas') {
         if (!selectedCityId) {
-          Alert.alert('City Required', 'Please select a city to assign this area to.');
+          Alert.alert('Validation Error', 'Please select a parent city for this area.');
           setSaving(false);
           return;
         }
@@ -168,31 +143,13 @@ export default function AdminMasterDataView() {
       }
 
       if (editItem) {
-        if (activeDomain === 'countries') await masterDataService.updateCountry(editItem.id, payload);
-        else if (activeDomain === 'cities') await masterDataService.updateCity(editItem.id, payload);
-        else if (activeDomain === 'areas') await masterDataService.updateArea(editItem.id, payload);
-        else if (activeDomain === 'locations') await masterDataService.updateLocation(editItem.id, payload);
-        else if (activeDomain === 'usertypes') await masterDataService.updateUserType(editItem.id, payload);
-        else if (activeDomain === 'paymentprefs') await masterDataService.updatePaymentPref(editItem.id, payload);
-        else if (activeDomain === 'statuses') await masterDataService.updateStatus(editItem.id, payload);
-        else if (activeDomain === 'configs') await masterDataService.updateConfig(editItem.id, payload);
+        await updateItemMutation.mutateAsync({ id: editItem.id, payload });
       } else {
-        if (activeDomain === 'countries') await masterDataService.createCountry(payload);
-        else if (activeDomain === 'cities') await masterDataService.createCity(payload);
-        else if (activeDomain === 'areas') await masterDataService.createArea(payload);
-        else if (activeDomain === 'locations') await masterDataService.createLocation(payload);
-        else if (activeDomain === 'usertypes') await masterDataService.createUserType(payload);
-        else if (activeDomain === 'paymentprefs') await masterDataService.createPaymentPref(payload);
-        else if (activeDomain === 'statuses') await masterDataService.createStatus(payload);
-        else if (activeDomain === 'configs') await masterDataService.createConfig(payload);
+        await createItemMutation.mutateAsync(payload);
       }
 
       setModalVisible(false);
-      fetchDomainItems(activeDomain);
-      masterDataService
-        .getCities()
-        .then((data) => setCitiesList(data || []))
-        .catch(() => { });
+      refetch();
       if (Platform.OS === 'android') {
         ToastAndroid.show('Saved successfully', ToastAndroid.SHORT);
       }
@@ -206,24 +163,13 @@ export default function AdminMasterDataView() {
   const handleDeleteItem = async () => {
     if (!deleteId) return;
     try {
-      setDeleting(true);
-      if (activeDomain === 'countries') await masterDataService.deleteCountry(deleteId);
-      else if (activeDomain === 'cities') await masterDataService.deleteCity(deleteId);
-      else if (activeDomain === 'areas') await masterDataService.deleteArea(deleteId);
-      else if (activeDomain === 'locations') await masterDataService.deleteLocation(deleteId);
-      else if (activeDomain === 'usertypes') await masterDataService.deleteUserType(deleteId);
-      else if (activeDomain === 'paymentprefs') await masterDataService.deletePaymentPref(deleteId);
-      else if (activeDomain === 'statuses') await masterDataService.deleteStatus(deleteId);
-      else if (activeDomain === 'configs') await masterDataService.deleteConfig(deleteId);
-
-      setItems((prev) => prev.filter((i) => i.id !== deleteId));
+      await deleteItemMutation.mutateAsync(deleteId);
       if (Platform.OS === 'android') {
         ToastAndroid.show('Deleted successfully', ToastAndroid.SHORT);
       }
     } catch (e: any) {
       Alert.alert('Delete Failed', e?.message || 'Could not delete item.');
     } finally {
-      setDeleting(false);
       setDeleteId(null);
     }
   };
@@ -253,7 +199,6 @@ export default function AdminMasterDataView() {
                 style={[styles.tabChip, active && styles.tabChipActive]}
                 onPress={() => {
                   if (activeDomain !== d.id) {
-                    setItems([]);
                     setSearchQuery('');
                     setActiveDomain(d.id);
                   }
@@ -290,10 +235,7 @@ export default function AdminMasterDataView() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchDomainItems(activeDomain);
-            }}
+            onRefresh={() => refetch()}
             tintColor="#0B5A3E"
           />
         }
@@ -414,7 +356,7 @@ export default function AdminMasterDataView() {
         message="Are you sure you want to delete this master data record?"
         confirmLabel="Delete"
         isDestructive
-        isLoading={deleting}
+        isLoading={deleteItemMutation.isPending}
         onConfirm={handleDeleteItem}
         onCancel={() => setDeleteId(null)}
       />

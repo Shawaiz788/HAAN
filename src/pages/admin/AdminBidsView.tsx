@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getTaskBids } from '@/services/bidding';
+import { useAdminBids } from '@/hooks/admin/useAdminBids';
 import { AdminBidItem } from '@/types/admin';
 import EmptyState from '@/components/admin/common/EmptyState';
 
@@ -21,31 +21,7 @@ export default function AdminBidsView() {
   const params = useLocalSearchParams();
   const taskId = Number(params.taskId || 1);
 
-  const [bids, setBids] = useState<AdminBidItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const fetchBids = async () => {
-    try {
-      setLoading(true);
-      const data = await getTaskBids(taskId);
-      setBids(data);
-    } catch (e) {
-      console.warn(`[AdminBidsView] Could not fetch bids for task ${taskId}:`, e);
-      // Fallback demonstration mock for task bidding details if backend is empty
-      setBids([
-        { id: '1', task_id: taskId, worker_id: 3, worker_name: 'Zara Worker', worker_rating: 4.8, amount: 2500, time_estimate: '2 hours', message: 'I can fix this issue right away with full warranty.', created_at: 'Today, 10:15 AM' },
-        { id: '2', task_id: taskId, worker_id: 5, worker_name: 'Usman Electrician', worker_rating: 4.2, amount: 2800, time_estimate: '1.5 hours', message: 'Professional service with original spare parts.', created_at: 'Today, 11:30 AM' },
-      ]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBids();
-  }, [taskId]);
+  const { data: bids = [], isLoading: loading, isRefetching: refreshing, refetch } = useAdminBids(taskId);
 
   return (
     <View style={styles.container}>
@@ -65,10 +41,7 @@ export default function AdminBidsView() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchBids();
-            }}
+            onRefresh={() => refetch()}
             tintColor="#0B5A3E"
           />
         }

@@ -20,7 +20,7 @@ import SearchBar from '@/components/admin/common/SearchBar';
 import EmptyState from '@/components/admin/common/EmptyState';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
 import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
-import { getAllEarnings, deleteWorkerEarnings } from '@/services/adminEarnings';
+import { useAdminEarnings, useDeleteWorkerEarnings } from '@/hooks/admin/useAdminEarnings';
 import { AdminEarningItem } from '@/types/admin';
 
 export default function AdminEarningsView() {
@@ -29,42 +29,20 @@ export default function AdminEarningsView() {
   const { user } = useAuth();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [earnings, setEarnings] = useState<AdminEarningItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
   const [deleteWorkerId, setDeleteWorkerId] = useState<number | string | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  const fetchEarnings = async () => {
-    try {
-      setLoading(true);
-      const data = await getAllEarnings();
-      setEarnings(data);
-    } catch (e) {
-      console.warn('[AdminEarningsView] Error loading earnings:', e);
-      // Mock fallback if empty backend
-      setEarnings([
-        { id: 1, worker_id: 3, worker_name: 'Zara Worker', daily_earning: 2500, weekly_earning: 17500, total_earning: 85000, jobs_done: 32, daily_jobs_done: 2 },
-        { id: 2, worker_id: 5, worker_name: 'Usman Electrician', daily_earning: 1200, weekly_earning: 8400, total_earning: 42000, jobs_done: 19, daily_jobs_done: 1 },
-      ]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const { data: earnings = [], isLoading, isRefetching, refetch } = useAdminEarnings();
+  const deleteEarningMutation = useDeleteWorkerEarnings();
+
+  const fetchEarnings = () => {
+    refetch();
   };
-
-  useEffect(() => {
-    fetchEarnings();
-  }, []);
 
   const handleDelete = async () => {
     if (!deleteWorkerId) return;
     try {
-      setDeleting(true);
-      await deleteWorkerEarnings(deleteWorkerId);
-      setEarnings((prev) => prev.filter((e) => e.worker_id !== deleteWorkerId));
+      await deleteEarningMutation.mutateAsync(deleteWorkerId);
       if (Platform.OS === 'android') {
         ToastAndroid.show('Earning record deleted', ToastAndroid.SHORT);
       } else {
@@ -73,7 +51,6 @@ export default function AdminEarningsView() {
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not delete earnings.');
     } finally {
-      setDeleting(false);
       setDeleteWorkerId(null);
     }
   };
@@ -106,16 +83,13 @@ export default function AdminEarningsView() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchEarnings();
-            }}
+            refreshing={isRefetching}
+            onRefresh={() => fetchEarnings()}
             tintColor="#0B5A3E"
           />
         }
       >
-        {loading && !refreshing ? (
+        {isLoading && !isRefetching ? (
           <View style={{ gap: 10 }}>
             {[1, 2, 3, 4, 5].map((i) => (
               <SkeletonCard key={i} />
@@ -178,7 +152,7 @@ export default function AdminEarningsView() {
         message="Are you sure you want to delete this worker's earning ledger record?"
         confirmLabel="Delete"
         isDestructive
-        isLoading={deleting}
+        isLoading={deleteEarningMutation.isPending}
         onConfirm={handleDelete}
         onCancel={() => setDeleteWorkerId(null)}
       />

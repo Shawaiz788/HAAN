@@ -24,7 +24,7 @@ import SearchBar from '@/components/admin/common/SearchBar';
 import EmptyState from '@/components/admin/common/EmptyState';
 import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
-import { getAdminUsers, deleteAdminUser, updateAdminUserById } from '@/services/adminUsers';
+import { useAdminUsers, useDeleteAdminUser, useUpdateAdminUser } from '@/hooks/admin/useAdminUsers';
 import { styles } from '@/styles/adminUsersView.styles';
 
 const ROLE_FILTERS = [
@@ -42,80 +42,39 @@ export default function AdminUsersView() {
   const { user } = useAuth();
   
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedRole, setSelectedRole] = useState<number | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<AdminUserItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
 
-  const handleUserCreated = (newUser: AdminUserItem) => {
-    setUsers((prev) => [newUser, ...prev]);
+  const { data, isLoading, isRefetching, refetch } = useAdminUsers(page, PAGE_SIZE);
+  const deleteUserMutation = useDeleteAdminUser();
+  const updateUserMutation = useUpdateAdminUser();
+
+  const users = data?.users || [];
+  const hasMore = data?.hasMore || false;
+
+  const handleUserCreated = () => {
+    refetch();
   };
 
   const handleUserUpdated = (updatedUser: AdminUserItem) => {
-    setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? { ...u, ...updatedUser } : u)));
+    refetch();
     if (selectedUser && selectedUser.id === updatedUser.id) {
       setSelectedUser({ ...selectedUser, ...updatedUser });
     }
   };
 
-  // Delete User Dialog State
-  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  // Fetch Page 1
-  const fetchUsers = useCallback(async (targetPage = 1, isRefresh = false) => {
-    try {
-      if (isRefresh || targetPage === 1) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-
-      const res = await getAdminUsers(targetPage, PAGE_SIZE);
-
-      setUsers((prev: AdminUserItem[]): AdminUserItem[] => {
-        if (targetPage === 1 || isRefresh) {
-          return res.users;
-        }
-        // Deduplicate users by ID
-        const existingIds = new Set(prev.map((u) => u.id));
-        const newUnique = res.users.filter((u) => !existingIds.has(u.id));
-        return [...prev, ...newUnique];
-      });
-
-      setHasMore(res.hasMore);
-      setPage(targetPage);
-    } catch (err: any) {
-      console.error('[AdminUsersView] Error fetching paginated admin users:', err);
-      if (Platform.OS === 'android') {
-        ToastAndroid.show(err?.message || 'Failed to load users', ToastAndroid.SHORT);
-      }
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchUsers(1);
-  }, [fetchUsers]);
-
   const onRefresh = () => {
-    setRefreshing(true);
-    fetchUsers(1, true);
+    refetch();
   };
 
   const handleLoadMore = () => {
-    if (!loading && !loadingMore && hasMore) {
-      fetchUsers(page + 1);
+    if (!isLoading && hasMore) {
+      setPage((prev) => prev + 1);
     }
   };
 
@@ -131,10 +90,7 @@ export default function AdminUsersView() {
   const handleStatusChange = async (userId: number, newStatus: 'active' | 'suspended') => {
     try {
       const is_active = newStatus === 'active';
-      await updateAdminUserById(userId, { is_active, status: newStatus });
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, status: newStatus } : u))
-      );
+      await updateUserMutation.mutateAsync({ id: userId, payload: { is_active, status: newStatus } });
       if (selectedUser && selectedUser.id === userId) {
         setSelectedUser({ ...selectedUser, status: newStatus });
       }
@@ -150,10 +106,7 @@ export default function AdminUsersView() {
     try {
       const currentUser = users.find((u) => u.id === userId);
       const newVerified = !currentUser?.verified;
-      await updateAdminUserById(userId, { is_verified: newVerified });
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, verified: newVerified } : u))
-      );
+      await updateUserMutation.mutateAsync({ id: userId, payload: { is_verified: newVerified } });
       if (selectedUser && selectedUser.id === userId) {
         setSelectedUser({ ...selectedUser, verified: newVerified });
       }
@@ -168,9 +121,7 @@ export default function AdminUsersView() {
   const handleDeleteConfirm = async () => {
     if (!deleteTargetId) return;
     try {
-      setDeleting(true);
-      await deleteAdminUser(deleteTargetId);
-      setUsers((prev) => prev.filter((u) => u.id !== deleteTargetId));
+      await deleteUserMutation.mutateAsync(deleteTargetId);
       if (Platform.OS === 'android') {
         ToastAndroid.show('User deleted successfully', ToastAndroid.SHORT);
       } else {
@@ -179,7 +130,6 @@ export default function AdminUsersView() {
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to delete user.');
     } finally {
-      setDeleting(false);
       setDeleteTargetId(null);
     }
   };
@@ -268,7 +218,7 @@ export default function AdminUsersView() {
   );
 
   const renderFooter = () => {
-    if (!loadingMore) return null;
+    if (!isLoading || page === 1) return null;
     return (
       <View style={styles.footerLoading}>
         <ActivityIndicator size="small" color="#0B5A3E" />
@@ -321,7 +271,7 @@ export default function AdminUsersView() {
       </View>
 
       {/* Paginated User Directory FlatList */}
-      {loading && !refreshing && users.length === 0 ? (
+      {isLoading && !isRefetching && users.length === 0 ? (
         <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <SkeletonCard key={i} />
@@ -341,7 +291,7 @@ export default function AdminUsersView() {
           onEndReachedThreshold={0.4}
           ListFooterComponent={renderFooter}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0B5A3E']} />
+            <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} colors={['#0B5A3E']} />
           }
           ListEmptyComponent={
             <EmptyState
@@ -378,7 +328,7 @@ export default function AdminUsersView() {
         message="Are you sure you want to delete this user? This action is permanent and cannot be undone."
         confirmLabel="Delete User"
         isDestructive
-        isLoading={deleting}
+        isLoading={deleteUserMutation.isPending}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTargetId(null)}
       />

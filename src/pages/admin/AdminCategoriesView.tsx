@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -22,19 +22,18 @@ import SubCategoryModal from '@/components/admin/category/SubCategoryModal';
 import EmptyState from '@/components/admin/common/EmptyState';
 import { SkeletonCard } from '@/components/admin/common/SkeletonLoader';
 import ConfirmDialog from '@/components/admin/common/ConfirmDialog';
-import { categoryService } from '@/services/category';
+import {
+  useAdminCategories,
+  useAdminSubcategories,
+  useDeleteCategory,
+  useDeleteSubcategory,
+} from '@/hooks/admin/useAdminCategories';
 import { Category, SubCategory } from '@/types/category';
 
 export default function AdminCategoriesView() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  // Data states
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [subcategories, setSubcategories] = useState<SubCategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Category Modal state
@@ -48,56 +47,49 @@ export default function AdminCategoriesView() {
 
   // Delete dialog state
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'category' | 'subcategory'; id: number } | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [catData, subData] = await Promise.all([
-        categoryService.getCategories(),
-        categoryService.getSubcategories(),
-      ]);
+  const categoriesQuery = useAdminCategories();
+  const subcategoriesQuery = useAdminSubcategories();
+  const deleteCategoryMutation = useDeleteCategory();
+  const deleteSubcategoryMutation = useDeleteSubcategory();
 
-      const formattedCats: Category[] = catData.map((c: any) => ({
-        id: Number(c.id),
-        name: c.name || `Category #${c.id}`,
-        color: c.color || '#10B981',
-        image: c.image || 'flash',
-      }));
+  const loading = categoriesQuery.isLoading || subcategoriesQuery.isLoading;
+  const refreshing = categoriesQuery.isRefetching || subcategoriesQuery.isRefetching;
 
-      const formattedSubs: SubCategory[] = subData.map((s: any) => {
-        const catId =
-          s.category_id !== undefined && s.category_id !== null
-            ? Number(s.category_id)
-            : typeof s.category === 'object' && s.category !== null
-            ? Number(s.category.id)
-            : typeof s.category === 'number'
-            ? Number(s.category)
-            : undefined;
+  const rawCats = categoriesQuery.data || [];
+  const rawSubs = subcategoriesQuery.data || [];
 
-        return {
-          id: Number(s.id),
-          name: s.name || `Subcategory #${s.id}`,
-          color: s.color || '#10B981',
-          image: s.image || 'flash',
-          category_id: catId,
-          base_price: Number(s.base_price || s.basePrice || 0),
-        };
-      });
+  const categories: Category[] = rawCats.map((c: any) => ({
+    id: Number(c.id),
+    name: c.name || `Category #${c.id}`,
+    color: c.color || '#10B981',
+    image: c.image || 'flash',
+  }));
 
-      setCategories(formattedCats);
-      setSubcategories(formattedSubs);
-    } catch (err: any) {
-      console.warn('[AdminCategoriesView] Error loading data from endpoints:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const subcategories: SubCategory[] = rawSubs.map((s: any) => {
+    const catId =
+      s.category_id !== undefined && s.category_id !== null
+        ? Number(s.category_id)
+        : typeof s.category === 'object' && s.category !== null
+        ? Number(s.category.id)
+        : typeof s.category === 'number'
+        ? Number(s.category)
+        : undefined;
+
+    return {
+      id: Number(s.id),
+      name: s.name || `Subcategory #${s.id}`,
+      color: s.color || '#10B981',
+      image: s.image || 'flash',
+      category_id: catId,
+      base_price: Number(s.base_price || s.basePrice || 0),
+    };
+  });
+
+  const loadData = () => {
+    categoriesQuery.refetch();
+    subcategoriesQuery.refetch();
   };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   // Category Actions
   const handleOpenAddCategory = () => {
@@ -110,37 +102,11 @@ export default function AdminCategoriesView() {
     setCategoryModalOpen(true);
   };
 
-  const handleSaveCategory = async (savedCat: Category) => {
-    try {
-      if (savedCat.id) {
-        await categoryService.updateCategory(savedCat.id, {
-          name: savedCat.name,
-          color: savedCat.color || '#10B981',
-          image: savedCat.image || 'flash',
-        });
-        setCategories((prev) =>
-          prev.map((c) => (c.id === savedCat.id ? { ...c, ...savedCat } : c))
-        );
-      } else {
-        const created = await categoryService.createCategory({
-          name: savedCat.name,
-          color: savedCat.color || '#10B981',
-          image: savedCat.image || 'flash',
-        });
-        const newCat: Category = {
-          ...savedCat,
-          id: Number(created.id || Date.now()),
-          name: created.name || savedCat.name,
-        };
-        setCategories((prev) => [newCat, ...prev]);
-      }
-    } catch (err: any) {
-      console.error('[AdminCategoriesView] Save category error:', err);
-      Alert.alert('Error', err?.message || 'Failed to save category.');
-    }
+  const handleSaveCategory = async () => {
+    loadData();
   };
 
-  // SubCategory Actions (Create on Spot & Edit)
+  // SubCategory Actions
   const handleOpenAddSubCategory = (parentCat: Category) => {
     setParentCatForSub(parentCat);
     setSelectedSubCat(null);
@@ -153,31 +119,21 @@ export default function AdminCategoriesView() {
     setSubModalOpen(true);
   };
 
-  const handleSubCategorySaved = (savedSub: SubCategory, isNew: boolean) => {
-    if (isNew) {
-      setSubcategories((prev) => [savedSub, ...prev]);
-    } else {
-      setSubcategories((prev) =>
-        prev.map((s) => (s.id === savedSub.id ? { ...s, ...savedSub } : s))
-      );
-    }
+  const handleSubCategorySaved = () => {
+    loadData();
   };
 
   // Delete Action
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      setDeleting(true);
       if (deleteTarget.type === 'category') {
-        await categoryService.deleteCategory(deleteTarget.id);
-        setCategories((prev) => prev.filter((c) => c.id !== deleteTarget.id));
-        setSubcategories((prev) => prev.filter((s) => s.category_id !== deleteTarget.id));
+        await deleteCategoryMutation.mutateAsync(deleteTarget.id);
         if (Platform.OS === 'android') {
           ToastAndroid.show('Category deleted', ToastAndroid.SHORT);
         }
       } else {
-        await categoryService.deleteSubcategory(deleteTarget.id);
-        setSubcategories((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+        await deleteSubcategoryMutation.mutateAsync(deleteTarget.id);
         if (Platform.OS === 'android') {
           ToastAndroid.show('Subcategory deleted', ToastAndroid.SHORT);
         }
@@ -185,7 +141,6 @@ export default function AdminCategoriesView() {
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to delete item.');
     } finally {
-      setDeleting(false);
       setDeleteTarget(null);
     }
   };
@@ -234,10 +189,7 @@ export default function AdminCategoriesView() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              loadData();
-            }}
+            onRefresh={loadData}
             tintColor="#0B5A3E"
           />
         }
@@ -296,7 +248,7 @@ export default function AdminCategoriesView() {
         message={`Are you sure you want to delete this ${deleteTarget?.type}? This action cannot be undone.`}
         confirmLabel="Delete"
         isDestructive
-        isLoading={deleting}
+        isLoading={deleteCategoryMutation.isPending || deleteSubcategoryMutation.isPending}
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
