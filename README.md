@@ -24,6 +24,11 @@
 
 A premium, production-grade on-demand services marketplace built with **Expo SDK 54** and **React Native 0.81**. The platform connects **Customers** seeking home and technical services with **Professionals** who bid on jobs in real-time, all managed through a comprehensive **Admin Control Panel**. Features include real-time WebSocket bidding, polygon geofencing, persistent offline storage, JWT auto-refresh, push notifications, and a modular architecture across **183 source files**.
 
+> [!IMPORTANT]
+> **Backend Integration & Verification System Notice**:
+> The User & Professional **CNIC Identity Verification System** (`verify_attachment_id_front`, `verify_attachment_id_back`, `/v1/admin/unverified/`, `/v1/user/add-verify/`, `/v1/admin/verify/{id}/`) was recently introduced on the platform backend. 
+> Because this system is actively evolving, some backend API endpoints may currently return non-standard schemas, 403 authorization requirement changes, or method mismatches. These edge cases and endpoint responses will need to be continuously handled and updated in future development iterations as backend endpoints mature.
+
 ---
 
 ## Table of Contents
