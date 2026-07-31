@@ -19,12 +19,14 @@ export const getCachedPaymentPreferences = (): PaymentPreference[] => {
 export const syncPaymentPreferences = async (): Promise<PaymentPreference[]> => {
   try {
     const data = await getPaymentPreferencesFromBackend();
-    if (data && Array.isArray(data)) {
+    if (data && Array.isArray(data) && data.length > 0) {
       storage.set('payment_preferences', JSON.stringify(data));
       return data;
     }
-  } catch (e) {
-    console.error('[paymentStore] Error syncing payment preferences from backend:', e);
+  } catch (e: any) {
+    if (!e?.message?.includes('403') && !e?.message?.includes('not verified')) {
+      console.error('[paymentStore] Error syncing payment preferences from backend:', e);
+    }
   }
   return getCachedPaymentPreferences();
 };

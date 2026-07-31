@@ -31,6 +31,10 @@ export function useRouteByUserType() {
 
         // Professional / Worker (3)
         if (user.usertype_id === USER_TYPE_PRO) {
+            if (!user.is_verified) {
+                router.replace('/(protected)/(pro)/id-verification');
+                return;
+            }
             router.replace('/(protected)/(pro)/live-jobs');
             return;
         }

@@ -3,10 +3,11 @@ import * as SecureStore from 'expo-secure-store';
 import { AppUser, Task } from '@/types';
 import useTaskStore from '../store/taskStore';
 import { getUserTasksFromBackend } from '@/services/task';
-import { USER_TYPE_CLIENT } from '@/constants/userTypes';
+import { USER_TYPE_CLIENT, USER_TYPE_PRO } from '@/constants/userTypes';
 import { syncPaymentPreferences } from '@/store/paymentStore';
 import { mapBackendTaskToLocal } from '@/utils/taskMapper';
 import { logger } from '@/utils/logger';
+import { idVerificationService } from '@/services/idVerificationService';
 
 interface AuthContextType {
     user: AppUser | null;
@@ -34,7 +35,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
             const sessionStr = await SecureStore.getItemAsync('user_session');
             if (sessionStr) {
-                const sessionUser = JSON.parse(sessionStr);
+                const sessionUser: AppUser = JSON.parse(sessionStr);
+
+                // For pro users, verify live verification status on app load if not already verified
+                if (sessionUser?.id && sessionUser?.usertype_id === USER_TYPE_PRO && !sessionUser.is_verified) {
+                    try {
+                        const liveStatus = await idVerificationService.getVerificationStatus(Number(sessionUser.id));
+                        if (liveStatus.status === 'verified') {
+                            sessionUser.is_verified = true;
+                            await SecureStore.setItemAsync('user_session', JSON.stringify(sessionUser));
+                        }
+                    } catch (e) {
+                        // ignore network error
+                    }
+                }
+
                 setUser(sessionUser);
                 // Background sync payment preferences on app open
                 syncPaymentPreferences().catch(() => {});
@@ -121,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } as AppUser;
 
             await SecureStore.setItemAsync('user_session', JSON.stringify(newSession));
-            logger.log('[SecureStore] Updated user session in SecureStore');
+            logger.log('[SecureStore] Updated user session in SecureStore:', newSession.is_verified);
             setUser(newSession);
         } catch (e) {
             logger.error('Error updating user session:', e);

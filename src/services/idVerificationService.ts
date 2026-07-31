@@ -72,10 +72,27 @@ export const idVerificationService: IdVerificationService = {
           null;
 
         // Strict boolean check (handles boolean true, string "true", integer 1)
-        const isVerifiedBool =
+        let isVerifiedBool =
           data.is_verified === true ||
           data.is_verified === 'true' ||
-          data.is_verified === 1;
+          data.is_verified === 1 ||
+          data.verified === true ||
+          data.verified === 'true' ||
+          data.verified === 1;
+
+        if (!isVerifiedBool) {
+          try {
+            const vRes = await fetchWithAuth(`${API_URL}/v1/admin/verify/${userId}/`);
+            if (vRes.ok) {
+              const vData = await vRes.json();
+              if (vData.is_verified === true || vData.is_verified === 'true' || vData.is_verified === 1) {
+                isVerifiedBool = true;
+              }
+            }
+          } catch {
+            // ignore fallback
+          }
+        }
 
         let status: 'unsubmitted' | 'pending' | 'verified' | 'rejected' = 'unsubmitted';
         if (isVerifiedBool) {

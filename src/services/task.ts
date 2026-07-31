@@ -182,6 +182,9 @@ export const getPaymentPreferencesFromBackend = async (): Promise<PaymentPrefere
   const responseText = await response.text();
 
   if (!response.ok) {
+    if (response.status === 403 || response.status === 401) {
+      return [];
+    }
     throw new Error(`Failed to fetch payment preferences. Status: ${response.status}. Response: ${responseText}`);
   }
 

@@ -54,6 +54,9 @@ export interface User {
   location?: any;
   profile_pic?: string;
   image?: string;
+  is_verified?: boolean;
+  verify_attachment_id_front?: number | string | null;
+  verify_attachment_id_back?: number | string | null;
 }
 
 export interface AppUser extends User {
@@ -63,6 +66,7 @@ export interface AppUser extends User {
   location?: UserLocation;
   token?: string;      // JWT access token
   refreshToken?: string; // JWT refresh token
+  is_verified?: boolean;
 }
 
 export interface UserType {

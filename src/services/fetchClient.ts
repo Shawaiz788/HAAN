@@ -178,27 +178,41 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}): Pro
         }
     }
 
-    // If unauthorized (401 or 403), perform a token refresh and retry once
+    // If unauthorized (401 or 403), perform a token refresh and retry once (unless it's an unverified account 403)
     if (response.status === 401 || response.status === 403) {
-        logger.log(`[fetchClient] Access token invalid/expired (${response.status}). Attempting refresh...`);
-        const refreshToken = await SecureStore.getItemAsync('user_refresh_token');
-
-        if (refreshToken) {
+        let isUnverifiedError = false;
+        if (response.status === 403) {
             try {
-                const newAccessToken = await refreshAndPersistToken(refreshToken);
+                const peekText = await response.clone().text();
+                if (peekText.toLowerCase().includes('not verified') || peekText.toLowerCase().includes('unverified')) {
+                    isUnverifiedError = true;
+                }
+            } catch (e) {
+                // ignore clone/text peek error
+            }
+        }
 
-                const retryHeaders = {
-                    ...options.headers,
-                    'Authorization': `Bearer ${newAccessToken}`,
-                };
+        if (!isUnverifiedError) {
+            logger.log(`[fetchClient] Access token invalid/expired (${response.status}). Attempting refresh...`);
+            const refreshToken = await SecureStore.getItemAsync('user_refresh_token');
 
-                logger.log('[fetchClient] Retrying failed request with new access token...');
-                response = await fetchWithTimeout(url, {
-                    ...options,
-                    headers: retryHeaders,
-                });
-            } catch (refreshErr) {
-                logger.error('[fetchClient] Background token refresh retry failed:', refreshErr);
+            if (refreshToken) {
+                try {
+                    const newAccessToken = await refreshAndPersistToken(refreshToken);
+
+                    const retryHeaders = {
+                        ...options.headers,
+                        'Authorization': `Bearer ${newAccessToken}`,
+                    };
+
+                    logger.log('[fetchClient] Retrying failed request with new access token...');
+                    response = await fetchWithTimeout(url, {
+                        ...options,
+                        headers: retryHeaders,
+                    });
+                } catch (refreshErr) {
+                    logger.error('[fetchClient] Background token refresh retry failed:', refreshErr);
+                }
             }
         }
     }

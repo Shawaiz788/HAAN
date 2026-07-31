@@ -313,7 +313,13 @@ The app features cross-platform native audio calling powered by **`react-native-
 - **Multipart Upload:** Image attachments are uploaded via `POST /app/attachment/` returning `{ id, url }`.
 - **Immediate Local Cache:** Uploaded URLs are cached locally instantly in `attachmentCache[id]` for zero-latency rendering.
 - **Automatic Fallback Resolution:** Inbound messages with `attachment_id` query `GET /app/attachment/${attachmentId}/`, with automatic fallback to `GET /app/attachment/${taskId}/` if single lookup yields empty array.
-- **Full-Screen Lightbox:** Tapping chat images opens `ChatImagePreviewModal.tsx` for full-screen preview.
+### 🪪 CNIC Identity Verification & Admin Control Dashboard
+
+- **Sensor-to-Screen Precise Camera Cropping:** Integrates `expo-image-manipulator` to perform pixel-accurate mathematical cropping, matching the camera viewfinder guide box (`IdCameraOverlay.tsx`) aspect ratio across device screen sizes.
+- **Unverified Professional Route Guard:** Intercepts unverified Professional navigation (`ProLayout`) and hardware back button actions (`BackHandler`), enforcing staying on the ID verification screen until verified with Toast notifications.
+- **Live Status & Pull-To-Refresh:** Supports pull-to-refresh (`RefreshControl`) and on-demand status check buttons querying `GET /v1/profile/{id}/` and `/v1/admin/verify/{id}/`.
+- **Authenticated Media Pipeline (`AuthenticatedImage.tsx`):** Passes JWT `Authorization: Bearer <token>` headers to native image requests, resolving 403 authorization requirement restrictions on media endpoints.
+- **Admin Verification Control Center (`AdminUnverifiedUsersView.tsx`):** Real-time list of unverified users with side-by-side CNIC thumbnails, full-screen lightbox preview (`CnicImagePreviewModal.tsx`), and direct Approve/Reject toggles.
 
 ---
 

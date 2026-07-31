@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   ScrollView,
   Pressable,
-  TextInput,
   Alert,
   ToastAndroid,
   Platform,
   ActivityIndicator,
   KeyboardAvoidingView,
+  RefreshControl,
+  BackHandler,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,10 +32,11 @@ import IdCameraOverlay from '@/components/pro/idVerification/IdCameraOverlay';
 export default function ProIdVerificationView() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const userId = Number(user?.id || 1);
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [record, setRecord] = useState<VerificationRecord>({ status: 'unsubmitted' });
 
@@ -47,23 +49,91 @@ export default function ProIdVerificationView() {
   const [cameraModalVisible, setCameraModalVisible] = useState(false);
   const [cameraSide, setCameraSide] = useState<IdSide>('front');
 
-  const fetchRecord = async () => {
+  const isVerified = record.status === 'verified' || Boolean(user?.is_verified);
+
+  const showVerificationRequiredToast = () => {
+    const msg = 'Need to verify account in order to use features';
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(msg, ToastAndroid.LONG);
+    } else {
+      Alert.alert('Account Verification Required', msg);
+    }
+  };
+
+  const fetchRecord = useCallback(async (isManualRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isManualRefresh) setLoading(true);
       const data = await idVerificationService.getVerificationStatus(userId);
       setRecord(data);
       if (data.frontUri) setFrontUri(data.frontUri);
       if (data.backUri) setBackUri(data.backUri);
+
+      // Sync auth session user state if changed
+      const isVerifiedNow = data.status === 'verified';
+      if (user?.is_verified !== isVerifiedNow) {
+        await updateUser({ is_verified: isVerifiedNow });
+      }
+
+      if (isManualRefresh) {
+        let msg = 'Verification status refreshed';
+        if (data.status === 'verified') {
+          msg = 'Status Refreshed: Account is Verified ✓';
+        } else if (data.status === 'pending') {
+          msg = 'Status Refreshed: Verification Under Review ⏳';
+        } else if (data.status === 'rejected') {
+          msg = 'Status Refreshed: Verification Rejected ❌';
+        } else {
+          msg = 'Status Refreshed: CNIC Photos Required 📷';
+        }
+
+        if (Platform.OS === 'android') {
+          ToastAndroid.show(msg, ToastAndroid.SHORT);
+        } else {
+          Alert.alert('Status Check', msg);
+        }
+      }
     } catch (e) {
       console.warn('[ProIdVerificationView] Error loading verification state:', e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [userId, user?.is_verified, updateUser]);
 
   useEffect(() => {
     fetchRecord();
   }, [userId]);
+
+  // Handle hardware back button press & navigation prevention
+  useEffect(() => {
+    const onBackPress = () => {
+      if (!isVerified) {
+        showVerificationRequiredToast();
+        return true; // Block hardware back button navigation for unverified users
+      }
+      return false; // Allow standard back navigation if verified
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [isVerified]);
+
+  const handleBackNavigation = () => {
+    if (!isVerified) {
+      showVerificationRequiredToast();
+    } else {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(protected)/(pro)/live-jobs');
+      }
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchRecord(true);
+  };
 
   const handleOpenCamera = (side: IdSide) => {
     setCameraSide(side);
@@ -140,17 +210,31 @@ export default function ProIdVerificationView() {
     >
       {/* Header Bar */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top + 10, 20) }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        <Pressable onPress={handleBackNavigation} style={styles.backBtn}>
+          <Ionicons name={isVerified ? 'arrow-back' : 'lock-closed'} size={22} color="#FFFFFF" />
         </Pressable>
         <Text style={styles.headerTitle}>CNIC Verification</Text>
-        <View style={{ width: 36 }} />
+        <Pressable onPress={handleRefresh} style={styles.refreshHeaderBtn} disabled={refreshing}>
+          {refreshing ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Ionicons name="refresh" size={22} color="#FFFFFF" />
+          )}
+        </Pressable>
       </View>
 
       <ScrollView
         style={styles.content}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 30, 40) }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#16A34A']}
+            tintColor="#16A34A"
+          />
+        }
       >
         {loading ? (
           <View style={styles.loadingBox}>
@@ -161,6 +245,18 @@ export default function ProIdVerificationView() {
           <>
             {/* Status Header Banner */}
             <VerificationStatusHeader record={record} />
+
+            {/* Refresh Status Action Button */}
+            <Pressable style={styles.checkStatusBtn} onPress={handleRefresh} disabled={refreshing}>
+              {refreshing ? (
+                <ActivityIndicator size="small" color="#082C18" />
+              ) : (
+                <>
+                  <Ionicons name="sync-circle-outline" size={20} color="#082C18" />
+                  <Text style={styles.checkStatusBtnText}>Refresh Verification Status</Text>
+                </>
+              )}
+            </Pressable>
 
             {/* Front & Back Document Photo Slots */}
             <Text style={styles.sectionTitle}>CNIC Photo Capture</Text>
@@ -226,13 +322,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#082C18',
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 18,
   },
   backBtn: {
-    padding: 4,
+    padding: 6,
+  },
+  refreshHeaderBtn: {
+    padding: 6,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
     color: '#FFFFFF',
   },
@@ -252,18 +351,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  sectionBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+  checkStatusBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DCFCE7',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#86EFAC',
+    borderRadius: 12,
+    height: 44,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    gap: 8,
+  },
+  checkStatusBtnText: {
+    color: '#082C18',
+    fontSize: 14,
+    fontWeight: '700',
   },
   sectionTitle: {
     fontSize: 13,
@@ -273,33 +376,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 12,
     marginTop: 4,
-  },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 6,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 48,
-    gap: 10,
-  },
-  input: {
-    flex: 1,
-    color: '#1F2937',
-    fontSize: 14,
-    fontWeight: '500',
-    height: '100%',
   },
   submitBtn: {
     flexDirection: 'row',
