@@ -92,19 +92,28 @@ export default function ActiveTaskScreen({ onBack }: ActiveTaskScreenProps) {
     });
   }, [wsBids, activeTask?.acceptedBid?.user_id]);
 
-  const bids: Bid[] = wsBids.map((b) => ({
-    id: String(b.id),
-    user_id: Number(b.user_id),
-    name: b.user_name || (b.is_profile_loading ? '' : `Professional #${b.user_id}`),
-    avatar: b.user_avatar || '',
-    rating: b.user_rating || 4.8,
-    reviewsCount: proReviewCounts[Number(b.user_id)] ?? 0,
-    price: b.price,
-    timeEstimate: b.estimated_hours ? `${b.estimated_hours * 60} min` : '15 min',
-    message: b.estimated_hours ? `Estimated duration: ${b.estimated_hours} hours` : 'Ready to perform task',
-    phone_number: b.phone_number,
-    is_profile_loading: Boolean(b.is_profile_loading),
-  }));
+  const bids: Bid[] = wsBids.map((b) => {
+    const rawComment = (b as any).comment || (b as any).message || '';
+    const formattedHours = b.estimated_hours
+      ? b.estimated_hours < 1
+        ? `${Math.round(b.estimated_hours * 60)} mins`
+        : `${b.estimated_hours} hr${b.estimated_hours > 1 ? 's' : ''}`
+      : 'Ready Now';
+
+    return {
+      id: String(b.id),
+      user_id: Number(b.user_id),
+      name: b.user_name || (b.is_profile_loading ? '' : `Professional #${b.user_id}`),
+      avatar: b.user_avatar || '',
+      rating: b.user_rating || 4.8,
+      reviewsCount: proReviewCounts[Number(b.user_id)] ?? 0,
+      price: b.price,
+      timeEstimate: formattedHours,
+      message: rawComment,
+      phone_number: b.phone_number,
+      is_profile_loading: Boolean(b.is_profile_loading),
+    };
+  });
 
   const handleAcceptBid = (bid: Bid) => {
     sendWsAcceptBid(bid.id);

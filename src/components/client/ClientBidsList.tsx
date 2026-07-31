@@ -40,8 +40,8 @@ export function ClientBidsList({
                     <View style={[styles.skeletonLine, { width: 90, height: 12 }]} />
                   </View>
                   <View style={styles.bidPriceContainer}>
-                    <Text style={styles.bidPrice}>Rs. {bid.price}</Text>
-                    <Text style={styles.bidTime}>{bid.timeEstimate} away</Text>
+                    <Text style={styles.bidPrice}>Rs. {bid.price?.toLocaleString?.() ?? bid.price}</Text>
+                    <Text style={styles.bidTime}>{bid.timeEstimate ? `Est. ${bid.timeEstimate}` : 'Ready Now'}</Text>
                   </View>
                 </View>
 
@@ -62,6 +62,14 @@ export function ClientBidsList({
               </View>
             );
           }
+
+          const hasCustomMessage = Boolean(
+            bid.message &&
+            bid.message.trim().length > 0 &&
+            !bid.message.includes('Estimated duration') &&
+            !bid.message.includes('Ready to perform task') &&
+            !bid.message.includes('Service Provider')
+          );
 
           return (
             <View key={bid.id} style={styles.bidCard}>
@@ -86,12 +94,21 @@ export function ClientBidsList({
                   </View>
                 </Pressable>
                 <View style={styles.bidPriceContainer}>
-                  <Text style={styles.bidPrice}>Rs. {bid.price}</Text>
-                  <Text style={styles.bidTime}>{bid.timeEstimate} away</Text>
+                  <Text style={styles.bidPrice}>Rs. {bid.price?.toLocaleString?.() ?? bid.price}</Text>
+                  <Text style={styles.bidTime}>{bid.timeEstimate ? `Est. ${bid.timeEstimate}` : 'Ready Now'}</Text>
                 </View>
               </View>
 
-              <Text style={styles.bidComment}>"{bid.message}"</Text>
+              {hasCustomMessage ? (
+                <Text style={styles.bidComment}>"{bid.message}"</Text>
+              ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(34,197,94,0.08)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, gap: 4 }}>
+                    <Ionicons name="shield-checkmark" size={13} color="#22C55E" />
+                    <Text style={{ fontSize: 12, color: '#16A34A', fontWeight: '500' }}>Verified Service Provider</Text>
+                  </View>
+                </View>
+              )}
 
               <View style={styles.bidActions}>
                 <Pressable

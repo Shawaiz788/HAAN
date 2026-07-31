@@ -149,58 +149,75 @@ export const verifyUserOnBackend = async (userId: number): Promise<VerifyUserRes
 };
 
 /**
- * Checks if a phone number is already registered in the system.
- *
- * TODO: This currently abuses the POST /app/register/ endpoint by sending partial
- * data and parsing validation errors. Ask the backend team to create a dedicated
- * GET /app/user/exists/?phone=... endpoint instead, as this approach is fragile
- * and may trigger rate limiting or create incomplete records.
+ * Checks if a phone number is already registered in the system using Django CheckPhoneNumberView.
+ * Django View expects: GET ...?phone_number=<phone>
+ * Django Response: {"phone_number": "...", "is_registered": boolean}
  */
 export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> => {
-    const url = `${API_URL}/app/register/`;
-    logger.log('[checkPhoneExists] Checking phone existence via URL:', url);
+    const cleanPhone = phoneNumber.trim();
+    const encodedPhone = encodeURIComponent(cleanPhone);
+
+    let url = `${API_URL}/app/user/phone/?phone_number=${encodedPhone}`;
+    logger.log('[checkPhoneExists] Request URL:', url);
+
     try {
-        const response = await fetchWithTimeout(url, {
-            method: 'POST',
+        let response = await fetchWithTimeout(url, {
+            method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ phone_number: phoneNumber }),
         });
 
+        if (response.status === 404) {
+            const candidates = [
+                `${API_URL}/app/user/check-phone/?phone_number=${encodedPhone}`,
+                `${API_URL}/app/check-phone/?phone_number=${encodedPhone}`,
+                `${API_URL}/check-phone/?phone_number=${encodedPhone}`,
+            ];
+            for (const candidate of candidates) {
+                logger.log('[checkPhoneExists] Retrying with candidate URL:', candidate);
+                const res = await fetchWithTimeout(candidate, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                if (res.status !== 404) {
+                    response = res;
+                    url = candidate;
+                    break;
+                }
+            }
+        }
+
         const responseText = await response.text();
-        logger.log('[checkPhoneExists] Response Status:', response.status);
+        logger.log('[checkPhoneExists] Final Response Status:', response.status);
+        logger.log('[checkPhoneExists] Response Body:', responseText);
+
+        if (response.status === 200) {
+            try {
+                const data = JSON.parse(responseText);
+                logger.log('[checkPhoneExists] Parsed Response Data:', data);
+
+                if (typeof data.is_registered === 'boolean') {
+                    return data.is_registered;
+                }
+                if (typeof data.exists === 'boolean') {
+                    return data.exists;
+                }
+            } catch (e) {
+                logger.error('[checkPhoneExists] JSON parse error:', e);
+            }
+        }
 
         if (response.status === 400) {
             try {
                 const data = JSON.parse(responseText);
-                if (data && data.phone_number) {
-                    const errors = Array.isArray(data.phone_number) ? data.phone_number : [data.phone_number];
-                    const hasExistsError = errors.some((err: string) =>
-                        err.toLowerCase().includes('exist') ||
-                        err.toLowerCase().includes('unique')
-                    );
-                    if (hasExistsError) {
-                        return true;
-                    }
-                }
-                return false;
-            } catch (e) {
-                logger.error('[checkPhoneExists] Failed to parse JSON error response:', e);
-            }
+                if (data && typeof data.is_registered === 'boolean') return data.is_registered;
+            } catch {}
         }
-        if (!response.ok) {
-            if (response.status === 404) {
-                throw new Error('The registration server could not be reached (404). Please try again later.');
-            }
-            if (response.status >= 500) {
-                throw new Error('The server is temporarily busy or undergoing maintenance. Please try again in a few moments (5xx).');
-            }
-            throw new Error(`Check failed. Status: ${response.status}`);
-        }
+
         return false;
     } catch (error: any) {
-        logger.error('[checkPhoneExists] Connection error during check:', error);
+        logger.error('[checkPhoneExists] Error checking phone existence:', error);
         throw error;
     }
 };
