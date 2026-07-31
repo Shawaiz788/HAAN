@@ -24,7 +24,7 @@ import { updateProfilePic } from '@/services/user';
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.78;
 
-type DrawerRoute = 'dashboard' | 'live-jobs' | 'job-history' | 'earnings' | 'wallet';
+type DrawerRoute = 'dashboard' | 'live-jobs' | 'job-history' | 'earnings' | 'wallet' | 'id-verification';
 
 interface ProDrawerPanelProps {
     isOpen: boolean;
@@ -37,6 +37,7 @@ interface ProDrawerPanelProps {
 const MENU_ITEMS: { key: DrawerRoute; label: string; icon: string }[] = [
     { key: 'live-jobs', label: 'Live Jobs', icon: 'flash-outline' },
     { key: 'dashboard', label: 'Dashboard', icon: 'home-outline' },
+    { key: 'id-verification', label: 'ID Verification', icon: 'shield-checkmark-outline' },
     { key: 'job-history', label: 'Job History', icon: 'time-outline' },
     { key: 'earnings', label: 'Earnings', icon: 'bar-chart-outline' },
     { key: 'wallet', label: 'My Wallet', icon: 'wallet-outline' },

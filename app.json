@@ -40,7 +40,21 @@
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow KaamKrwao to access your camera to capture ID card photos for identity verification."
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "kaamkarwao"
+        }
+      ]
     ],
     "extra": {
       "androidDebugFingerprint": {
