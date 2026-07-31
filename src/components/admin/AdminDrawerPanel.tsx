@@ -24,6 +24,7 @@ const { width } = Dimensions.get('window');
 
 export type AdminRouteType =
   | 'dashboard'
+  | 'unverified-users'
   | 'users'
   | 'pro-detail'
   | 'tasks'
@@ -105,6 +106,7 @@ export default function AdminDrawerPanel({ isOpen, onClose, activeRoute }: Admin
 
   const navItems: Array<{ id: AdminRouteType; label: string; icon: keyof typeof Ionicons.glyphMap; path: string }> = [
     { id: 'dashboard', label: 'Dashboard', icon: 'grid', path: '/(protected)/(admin)/dashboard' },
+    { id: 'unverified-users', label: 'CNIC Verifications', icon: 'shield-checkmark', path: '/(protected)/(admin)/unverified-users' },
     { id: 'users', label: 'User Directory', icon: 'people', path: '/(protected)/(admin)/users' },
     { id: 'tasks', label: 'Task Management', icon: 'list', path: '/(protected)/(admin)/tasks' },
     { id: 'bids', label: 'Task Bidding', icon: 'cash', path: '/(protected)/(admin)/bids' },

@@ -272,7 +272,10 @@ export const updateAdminUserImage = async (uri: string): Promise<any> => {
 };
 
 export const getVerificationStatus = async (id: number): Promise<any> => {
-  const response = await fetchWithAuth(`${API_URL}/v1/verify/${id}/`);
+  let response = await fetchWithAuth(`${API_URL}/v1/admin/verify/${id}/`);
+  if (!response.ok) {
+    response = await fetchWithAuth(`${API_URL}/v1/verify/${id}/`);
+  }
   const text = await response.text();
   if (!response.ok) {
     return { is_verified: false };
@@ -285,14 +288,34 @@ export const getVerificationStatus = async (id: number): Promise<any> => {
 };
 
 export const verifyUserStatus = async (id: number, isVerified: boolean): Promise<any> => {
-  const response = await fetchWithAuth(`${API_URL}/v1/verify/${id}/`, {
+  const adminUrl = `${API_URL}/v1/admin/verify/${id}/`;
+  const fallbackUrl = `${API_URL}/v1/verify/${id}/`;
+
+  let response = await fetchWithAuth(adminUrl, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ is_verified: isVerified }),
   });
+
+  if (!response.ok && (response.status === 405 || response.status === 404)) {
+    response = await fetchWithAuth(adminUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_verified: isVerified }),
+    });
+  }
+
+  if (!response.ok && (response.status === 405 || response.status === 404)) {
+    response = await fetchWithAuth(fallbackUrl, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_verified: isVerified }),
+    });
+  }
+
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Failed to verify user. Status: ${response.status}`);
+    throw new Error(`Failed to verify user ${id}. Status: ${response.status}. ${text}`);
   }
   try {
     return JSON.parse(text);

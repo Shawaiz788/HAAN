@@ -1,4 +1,3 @@
-import { createMMKV } from 'react-native-mmkv';
 import {
   IdVerificationPayload,
   VerificationRecord,
@@ -6,47 +5,112 @@ import {
 } from '@/types/idVerification';
 import { fetchWithAuth } from './fetchClient';
 
-const storage = createMMKV();
-const VERIFICATION_STORAGE_KEY = 'kaamkrwao_pro_id_verification_record';
-
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
 
+/**
+ * Upload a single attachment file to POST /v1/attachment/
+ * Returns attachment ID
+ */
+export const createSingleAttachment = async (uri: string): Promise<number | string> => {
+  console.log(`[IdVerificationService] Uploading attachment file: ${uri} to ${API_URL}/v1/attachment/`);
+  const formData = new FormData();
+  const filename = uri.split('/').pop() || 'cnic_doc.jpg';
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+  formData.append('file', {
+    uri,
+    name: filename,
+    type,
+  } as any);
+
+  formData.append('task_id', '1');
+  formData.append('task', '1');
+
+  const response = await fetchWithAuth(`${API_URL}/v1/attachment/`, {
+    method: 'POST',
+    body: formData,
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  const responseText = await response.text();
+  console.log(`[IdVerificationService] Upload attachment response status: ${response.status}, body:`, responseText);
+
+  if (!response.ok) {
+    throw new Error(`Status ${response.status}: ${responseText || 'File upload rejected by server'}`);
+  }
+
+  const data = JSON.parse(responseText);
+  const attachmentId = data.id || data.attachment_id || (Array.isArray(data) ? data[0]?.id : null);
+  if (!attachmentId) {
+    throw new Error(`Attachment upload response did not include ID: ${responseText}`);
+  }
+  return attachmentId;
+};
+
 export const idVerificationService: IdVerificationService = {
   getVerificationStatus: async (userId: number): Promise<VerificationRecord> => {
-    // 1. Try local cached MMKV state first
-    try {
-      const cachedRaw = storage.getString(`${VERIFICATION_STORAGE_KEY}_${userId}`);
-      if (cachedRaw) {
-        return JSON.parse(cachedRaw);
-      }
-    } catch (e) {
-      console.warn('[IdVerificationService] Cache read warning:', e);
-    }
+    const url = `${API_URL}/v1/profile/${userId}/`;
+    console.log(`[IdVerificationService] Live status request for userId ${userId} from ${url}`);
 
-    // 2. Attempt fetching from backend endpoint if available
     try {
-      const response = await fetchWithAuth(`${API_URL}/v1/pro/verification/status/`);
+      const response = await fetchWithAuth(url);
+      const responseText = await response.text();
+      console.log(`[IdVerificationService] Response status: ${response.status}, body:`, responseText);
+
       if (response.ok) {
-        const data = await response.json();
-        const record: VerificationRecord = {
-          status: data.status || 'unsubmitted',
-          fullName: data.full_name,
+        const data = JSON.parse(responseText);
+
+        const frontId =
+          data.verify_attachment_id_front ??
+          data.verify_attachment_front ??
+          data.attachment_id_front ??
+          null;
+
+        const backId =
+          data.verify_attachment_id_back ??
+          data.verify_attachment_back ??
+          data.attachment_id_back ??
+          null;
+
+        // Strict boolean check (handles boolean true, string "true", integer 1)
+        const isVerifiedBool =
+          data.is_verified === true ||
+          data.is_verified === 'true' ||
+          data.is_verified === 1;
+
+        let status: 'unsubmitted' | 'pending' | 'verified' | 'rejected' = 'unsubmitted';
+        if (isVerifiedBool) {
+          status = 'verified';
+        } else if (data.status === 'rejected' || data.rejection_reason) {
+          status = 'rejected';
+        } else if (frontId || backId) {
+          status = 'pending';
+        }
+
+        console.log(`[IdVerificationService] Raw is_verified: ${JSON.stringify(data.is_verified)} -> evaluated isVerifiedBool: ${isVerifiedBool}`);
+        console.log(`[IdVerificationService] frontId: ${frontId}, backId: ${backId}`);
+        console.log(`[IdVerificationService] Resolved live status: ${status}`);
+
+        return {
+          status,
+          fullName: data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim(),
           idNumber: data.id_number,
           cardType: data.card_type || 'cnic',
-          frontUri: data.front_image_url,
-          backUri: data.back_image_url,
-          submittedAt: data.submitted_at,
+          frontUri: frontId ? `${API_URL}/v1/attachment/${frontId}/` : undefined,
+          backUri: backId ? `${API_URL}/v1/attachment/${backId}/` : undefined,
+          submittedAt: data.submitted_at || new Date().toISOString(),
           rejectionReason: data.rejection_reason,
         };
-        storage.set(`${VERIFICATION_STORAGE_KEY}_${userId}`, JSON.stringify(record));
-        return record;
       }
     } catch (e) {
-      console.log('[IdVerificationService] Endpoint not available, using cached state:', e);
+      console.warn('[IdVerificationService] Live profile status fetch error:', e);
     }
 
-    // Default fallback state
+    // Default unsubmitted status if fetch fails or network unavailable
     return {
       status: 'unsubmitted',
     };
@@ -56,70 +120,63 @@ export const idVerificationService: IdVerificationService = {
     userId: number,
     payload: IdVerificationPayload
   ): Promise<VerificationRecord> => {
-    const record: VerificationRecord = {
-      status: 'pending',
-      fullName: payload.fullName,
-      idNumber: payload.idNumber,
-      cardType: payload.cardType,
-      frontUri: payload.frontUri,
-      backUri: payload.backUri,
-      submittedAt: new Date().toISOString(),
-    };
+    console.log(`[IdVerificationService] Submitting verification for userId ${userId}...`);
 
-    // Save locally to MMKV for immediate persistence
-    try {
-      storage.set(`${VERIFICATION_STORAGE_KEY}_${userId}`, JSON.stringify(record));
-    } catch (e) {
-      console.warn('[IdVerificationService] MMKV save warning:', e);
+    // 1. Upload Front Attachment if present
+    let frontAttachmentId: number | string | null = null;
+    if (payload.frontUri && !payload.frontUri.startsWith('http')) {
+      try {
+        frontAttachmentId = await createSingleAttachment(payload.frontUri);
+        console.log(`[IdVerificationService] Front attachment uploaded ID: ${frontAttachmentId}`);
+      } catch (e: any) {
+        console.error('[IdVerificationService] Front attachment upload failed:', e);
+        throw new Error(`CNIC Front photo upload failed (${e?.message || 'Server error'}). Please re-select/capture photo and try again.`);
+      }
     }
 
-    // Attempt submission to backend endpoint (gracefully handles missing endpoint)
-    try {
-      const formData = new FormData();
-      if (payload.fullName) formData.append('full_name', payload.fullName);
-      if (payload.idNumber) formData.append('id_number', payload.idNumber);
-      formData.append('card_type', payload.cardType);
-
-      if (payload.frontUri) {
-        const frontFilename = payload.frontUri.split('/').pop() || 'id_front.jpg';
-        formData.append('front_image', {
-          uri: payload.frontUri,
-          name: frontFilename,
-          type: 'image/jpeg',
-        } as any);
+    // 2. Upload Back Attachment if present
+    let backAttachmentId: number | string | null = null;
+    if (payload.backUri && !payload.backUri.startsWith('http')) {
+      try {
+        backAttachmentId = await createSingleAttachment(payload.backUri);
+        console.log(`[IdVerificationService] Back attachment uploaded ID: ${backAttachmentId}`);
+      } catch (e: any) {
+        console.error('[IdVerificationService] Back attachment upload failed:', e);
+        throw new Error(`CNIC Back photo upload failed (${e?.message || 'Server error'}). Please re-select/capture photo and try again.`);
       }
+    }
 
-      if (payload.backUri) {
-        const backFilename = payload.backUri.split('/').pop() || 'id_back.jpg';
-        formData.append('back_image', {
-          uri: payload.backUri,
-          name: backFilename,
-          type: 'image/jpeg',
-        } as any);
-      }
+    // 3. Update User Profile with verify_attachment_id_front & verify_attachment_id_back
+    const profilePayload: Record<string, any> = {};
+    if (frontAttachmentId) profilePayload.verify_attachment_id_front = frontAttachmentId;
+    if (backAttachmentId) profilePayload.verify_attachment_id_back = backAttachmentId;
 
-      const response = await fetchWithAuth(`${API_URL}/v1/pro/verification/submit/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
+    if (Object.keys(profilePayload).length > 0) {
+      console.log(`[IdVerificationService] Updating user profile with attachment IDs:`, profilePayload);
+      const profileRes = await fetchWithAuth(`${API_URL}/v1/update/user/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profilePayload),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const updatedRecord: VerificationRecord = {
-          ...record,
-          status: data.status || 'pending',
-          submittedAt: data.submitted_at || record.submittedAt,
-        };
-        storage.set(`${VERIFICATION_STORAGE_KEY}_${userId}`, JSON.stringify(updatedRecord));
-        return updatedRecord;
-      }
-    } catch (e) {
-      console.log('[IdVerificationService] Backend submit endpoint not ready, saved locally:', e);
-    }
+      const responseText = await profileRes.text();
+      console.log(`[IdVerificationService] Profile update response status: ${profileRes.status}, body:`, responseText);
 
-    return record;
+      if (!profileRes.ok) {
+        throw new Error(`Failed to update profile verification IDs (Status ${profileRes.status}): ${responseText}`);
+      }
+
+      return {
+        status: 'pending',
+        fullName: payload.fullName,
+        idNumber: payload.idNumber,
+        cardType: payload.cardType,
+        frontUri: payload.frontUri,
+        backUri: payload.backUri,
+        submittedAt: new Date().toISOString(),
+      };
+    } else {
+      throw new Error('No new CNIC attachments were selected to upload. Please capture or select front and back photos.');
+    }
   },
 };

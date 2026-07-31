@@ -73,6 +73,7 @@ export function useVerifyUserStatus() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [...ADMIN_PRO_DETAIL_QUERY_KEY, 'profile', variables.userId] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'unverified-users'] });
     },
   });
 }

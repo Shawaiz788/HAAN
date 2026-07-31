@@ -283,4 +283,28 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0B5A3E',
   },
+  verifiedStatusBadgePressable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  verifiedStatusTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  verifiedStatusTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  changeStatusLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0B5A3E',
+    textDecorationLine: 'underline',
+  },
 });

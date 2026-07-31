@@ -313,9 +313,29 @@ export default function UserDetailModal({
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>KYC Verification</Text>
-                    <Text style={[styles.infoValue, { color: user.verified ? '#0B5A3E' : '#D97706' }]}>
-                      {user.verified ? 'Verified Account' : 'Pending Verification'}
-                    </Text>
+                    <Pressable style={styles.verifiedStatusBadgePressable} onPress={handleToggleVerify}>
+                      <View
+                        style={[
+                          styles.verifiedStatusTag,
+                          { backgroundColor: user.verified ? '#DCFCE7' : '#FEF3C7' },
+                        ]}
+                      >
+                        <Ionicons
+                          name={user.verified ? 'checkmark-circle' : 'time-outline'}
+                          size={14}
+                          color={user.verified ? '#15803D' : '#B45309'}
+                        />
+                        <Text
+                          style={[
+                            styles.verifiedStatusTagText,
+                            { color: user.verified ? '#15803D' : '#B45309' },
+                          ]}
+                        >
+                          {user.verified ? 'VERIFIED' : 'UNVERIFIED'}
+                        </Text>
+                      </View>
+                      <Text style={styles.changeStatusLink}>Change</Text>
+                    </Pressable>
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Joined Date</Text>
@@ -342,14 +362,20 @@ export default function UserDetailModal({
                     </Text>
                   </Pressable>
 
-                  <Pressable style={styles.verifyBtn} onPress={handleToggleVerify}>
+                  <Pressable
+                    style={[
+                      styles.verifyBtn,
+                      { backgroundColor: user.verified ? '#FEF3C7' : '#DCFCE7', borderColor: user.verified ? '#FDE047' : '#86EFAC' },
+                    ]}
+                    onPress={handleToggleVerify}
+                  >
                     <Ionicons
-                      name={user.verified ? 'shield-checkmark' : 'shield-outline'}
+                      name={user.verified ? 'close-circle-outline' : 'shield-checkmark'}
                       size={18}
-                      color="#0B5A3E"
+                      color={user.verified ? '#B45309' : '#15803D'}
                     />
-                    <Text style={styles.verifyBtnText}>
-                      {user.verified ? 'Revoke KYC Verification' : 'Approve KYC Verification'}
+                    <Text style={[styles.verifyBtnText, { color: user.verified ? '#B45309' : '#15803D' }]}>
+                      {user.verified ? 'Mark as Unverified' : 'Mark as Verified'}
                     </Text>
                   </Pressable>
                 </View>
