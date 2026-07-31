@@ -16,10 +16,10 @@ export interface CreateAdminUserPayload {
 
 /**
  * Create a new user (Admin, Worker, or Customer)
- * Endpoint: POST /app/register/
+ * Endpoint: POST /v1/register/
  */
 export const createAdminUser = async (payload: CreateAdminUserPayload): Promise<AdminUserItem> => {
-  const url = `${API_URL}/app/register/`;
+  const url = `${API_URL}/v1/register/`;
   const response = await fetchWithAuth(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -68,13 +68,13 @@ export interface PaginatedAdminUsersResponse {
 
 /**
  * Fetch paginated list of all platform users for Admin Dashboard
- * Endpoint: /app/admin/get/users/?page=X&page_size=Y
+ * Endpoint: /v1/admin/get/users/?page=X&page_size=Y
  */
 export const getAdminUsers = async (
   page = 1,
   pageSize = 20
 ): Promise<PaginatedAdminUsersResponse> => {
-  const url = `${API_URL}/app/admin/get/users/?page=${page}&page_size=${pageSize}`;
+  const url = `${API_URL}/v1/admin/get/users/?page=${page}&page_size=${pageSize}`;
   const response = await fetchWithAuth(url);
   const text = await response.text();
   if (!response.ok) {
@@ -125,10 +125,10 @@ export const getAdminUsers = async (
 
 /**
  * Fetch specific user details by ID for Admin
- * Endpoint: /app/admin/get/users/{id}
+ * Endpoint: /v1/admin/get/users/{id}
  */
 export const getAdminUserById = async (id: number): Promise<AdminUserItem | null> => {
-  const response = await fetchWithAuth(`${API_URL}/app/admin/get/users/${id}`);
+  const response = await fetchWithAuth(`${API_URL}/v1/admin/get/users/${id}`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return null;
@@ -161,13 +161,13 @@ export const getAdminUserById = async (id: number): Promise<AdminUserItem | null
 
 /**
  * Update specific user's profile attributes as Admin
- * Endpoint: PATCH /app/admin/get/users/{id}/
+ * Endpoint: PATCH /v1/admin/get/users/{id}/
  */
 export const updateAdminUserById = async (
   id: number,
   payload: Partial<AdminUserItem> & Record<string, any>
 ): Promise<AdminUserItem> => {
-  const url = `${API_URL}/app/admin/get/users/${id}/`;
+  const url = `${API_URL}/v1/admin/get/users/${id}/`;
   const response = await fetchWithAuth(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -205,16 +205,16 @@ export const updateAdminUserById = async (
 
 /**
  * Soft-delete specific user profile as Admin
- * Endpoint: DELETE /app/admin/get/users/{id}/delete/
+ * Endpoint: DELETE /v1/admin/get/users/{id}/delete/
  */
 export const deleteAdminUser = async (id: number): Promise<boolean> => {
-  let response = await fetchWithAuth(`${API_URL}/app/admin/get/users/${id}/delete/`, {
+  let response = await fetchWithAuth(`${API_URL}/v1/admin/get/users/${id}/delete/`, {
     method: 'DELETE',
   });
   
   if (!response.ok && (response.status === 405 || response.status === 404)) {
     // Retry without trailing slash if required by backend URL router
-    response = await fetchWithAuth(`${API_URL}/app/admin/get/users/${id}/delete`, {
+    response = await fetchWithAuth(`${API_URL}/v1/admin/get/users/${id}/delete`, {
       method: 'DELETE',
     });
   }
@@ -230,7 +230,7 @@ export const getUserProfile = async (id: number): Promise<AdminUserItem> => {
   const user = await getAdminUserById(id);
   if (user) return user;
 
-  const response = await fetchWithAuth(`${API_URL}/app/profile/${id}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/profile/${id}/`);
   const text = await response.text();
   if (!response.ok) {
     throw new Error(`Failed to fetch user profile (${id}). Status: ${response.status}`);
@@ -239,7 +239,7 @@ export const getUserProfile = async (id: number): Promise<AdminUserItem> => {
 };
 
 export const updateAdminUser = async (id: number, data: Partial<User>): Promise<User> => {
-  const response = await fetchWithAuth(`${API_URL}/app/update/user/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/update/user/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, ...data }),
@@ -259,7 +259,7 @@ export const updateAdminUserImage = async (uri: string): Promise<any> => {
 
   formData.append('file', { uri, name: filename, type } as any);
 
-  const response = await fetchWithAuth(`${API_URL}/app/update/user/image/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/update/user/image/`, {
     method: 'PATCH',
     body: formData,
     headers: { Accept: 'application/json' },
@@ -272,7 +272,7 @@ export const updateAdminUserImage = async (uri: string): Promise<any> => {
 };
 
 export const getVerificationStatus = async (id: number): Promise<any> => {
-  const response = await fetchWithAuth(`${API_URL}/app/verify/${id}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/verify/${id}/`);
   const text = await response.text();
   if (!response.ok) {
     return { is_verified: false };
@@ -285,7 +285,7 @@ export const getVerificationStatus = async (id: number): Promise<any> => {
 };
 
 export const verifyUserStatus = async (id: number, isVerified: boolean): Promise<any> => {
-  const response = await fetchWithAuth(`${API_URL}/app/verify/${id}/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/verify/${id}/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ is_verified: isVerified }),
@@ -302,7 +302,7 @@ export const verifyUserStatus = async (id: number, isVerified: boolean): Promise
 };
 
 export const getUserRating = async (userId: number): Promise<{ rating: number; count: number }> => {
-  const response = await fetchWithAuth(`${API_URL}/app/review/rating/${userId}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/review/rating/${userId}/`);
   const text = await response.text();
   if (!response.ok) {
     return { rating: 5.0, count: 0 };

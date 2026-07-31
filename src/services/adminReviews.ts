@@ -2,7 +2,7 @@ import { fetchWithAuth, API_URL } from './fetchClient';
 import { AdminReviewItem } from '@/types/admin';
 
 export const getAllReviews = async (): Promise<AdminReviewItem[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/review/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/review/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return [];
@@ -13,7 +13,7 @@ export const getAllReviews = async (): Promise<AdminReviewItem[]> => {
 };
 
 export const createReview = async (payload: Partial<AdminReviewItem>): Promise<AdminReviewItem> => {
-  const response = await fetchWithAuth(`${API_URL}/app/review/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/review/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -26,7 +26,7 @@ export const createReview = async (payload: Partial<AdminReviewItem>): Promise<A
 };
 
 export const getReviewById = async (id: number): Promise<AdminReviewItem | null> => {
-  const response = await fetchWithAuth(`${API_URL}/app/review/${id}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/review/${id}/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return null;
@@ -36,7 +36,7 @@ export const getReviewById = async (id: number): Promise<AdminReviewItem | null>
 };
 
 export const updateReview = async (id: number, payload: Partial<AdminReviewItem>): Promise<AdminReviewItem> => {
-  const response = await fetchWithAuth(`${API_URL}/app/review/${id}/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/review/${id}/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -49,7 +49,7 @@ export const updateReview = async (id: number, payload: Partial<AdminReviewItem>
 };
 
 export const deleteReview = async (id: number): Promise<boolean> => {
-  const response = await fetchWithAuth(`${API_URL}/app/review/${id}/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/review/${id}/`, {
     method: 'DELETE',
   });
   if (!response.ok) {
@@ -59,7 +59,7 @@ export const deleteReview = async (id: number): Promise<boolean> => {
 };
 
 export const getCustomerReviews = async (userId: number): Promise<AdminReviewItem[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/review/customer/${userId}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/review/customer/${userId}/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return [];

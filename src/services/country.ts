@@ -31,7 +31,7 @@ export const getCountries = async (forceRefresh: boolean = false): Promise<Count
 
 const fetchCountriesFromApiAndCache = async (): Promise<Country[]> => {
   logger.log('[country API] Fetching countries from backend API...');
-  const response = await fetchWithTimeout(`${API_URL}/app/country/`);
+  const response = await fetchWithTimeout(`${API_URL}/v1/country/`);
   const data = await response.json();
 
   let list: Country[] = [];
@@ -49,7 +49,7 @@ const fetchCountriesFromApiAndCache = async (): Promise<Country[]> => {
 
 export const createCountry = async (name: string): Promise<Country> => {
   logger.log(`[country API] Creating country: "${name}"`);
-  const response = await fetchWithTimeout(`${API_URL}/app/country/`, {
+  const response = await fetchWithTimeout(`${API_URL}/v1/country/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

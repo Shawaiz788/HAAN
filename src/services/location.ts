@@ -12,7 +12,7 @@ export { UserLocation };
 
 export const createLocation = async (location: UserLocation): Promise<UserLocation> => {
   logger.log('[createLocation API] Sending payload:', JSON.stringify(location, null, 2));
-  const response = await fetchWithTimeout(`${API_URL}/app/location/`, {
+  const response = await fetchWithTimeout(`${API_URL}/v1/location/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -36,7 +36,7 @@ export const createLocation = async (location: UserLocation): Promise<UserLocati
 };
 
 export const getLocationById = async (id: number): Promise<UserLocation> => {
-  const response = await fetchWithTimeout(`${API_URL}/app/location/${id}/`);
+  const response = await fetchWithTimeout(`${API_URL}/v1/location/${id}/`);
   const responseText = await response.text();
 
   if (!response.ok) {

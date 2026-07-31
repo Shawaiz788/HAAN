@@ -29,7 +29,7 @@ export interface TaskChainInput {
 // Fetch task attachments for a given taskId
 export const getTaskAttachments = async (taskId: number): Promise<any[]> => {
   logger.log(`[task API] Fetching attachments for task ID: ${taskId}`);
-  const url = `${API_URL}/app/attachment/${taskId}/`;
+  const url = `${API_URL}/v1/attachment/${taskId}/`;
 
   const response = await fetchWithAuth(url);
   const responseText = await response.text();
@@ -68,7 +68,7 @@ export const uploadAttachment = async (uri: string, taskId: number): Promise<{ i
   formData.append('task_id', taskId.toString());
   formData.append('task', taskId.toString());
 
-  const response = await fetchWithAuth(`${API_URL}/app/attachment/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/attachment/`, {
     method: 'POST',
     body: formData,
     headers: {
@@ -105,8 +105,8 @@ export const uploadAttachment = async (uri: string, taskId: number): Promise<{ i
 
 /**
  * Fetches attachment details with 2-stage fallback:
- * 1. Queries single attachment endpoint /app/attachment/{id}/
- * 2. If single lookup fails or returns empty, queries parent task attachments list /app/attachment/{taskId}/
+ * 1. Queries single attachment endpoint /v1/attachment/{id}/
+ * 2. If single lookup fails or returns empty, queries parent task attachments list /v1/attachment/{taskId}/
  */
 export const getAttachmentById = async (
   attachmentId: number | string,
@@ -114,7 +114,7 @@ export const getAttachmentById = async (
 ): Promise<{ id: number | string; url: string }> => {
   try {
     logger.log(`[task API] Fetching attachment details for ID: ${attachmentId} (Task ID: ${taskId})`);
-    const response = await fetchWithAuth(`${API_URL}/app/attachment/${attachmentId}/`);
+    const response = await fetchWithAuth(`${API_URL}/v1/attachment/${attachmentId}/`);
     if (response.ok) {
       const data = await response.json();
       logger.log(`[task API] Attachment ${attachmentId} response data:`, data);
@@ -143,7 +143,7 @@ export const getAttachmentById = async (
     // Fallback: If single attachment lookup returned empty array or didn't match exact ID, query task attachments
     if (taskId) {
       logger.log(`[task API] Fallback: Querying all attachments for Task ID: ${taskId}`);
-      const taskResponse = await fetchWithAuth(`${API_URL}/app/attachment/${taskId}/`);
+      const taskResponse = await fetchWithAuth(`${API_URL}/v1/attachment/${taskId}/`);
       if (taskResponse.ok) {
         const taskData = await taskResponse.json();
         const list = Array.isArray(taskData) ? taskData : (taskData.results || taskData.attachments || []);
@@ -166,7 +166,7 @@ export const getAttachmentById = async (
 
 // Fetch categories list (authenticated)
 export const getCategoriesFromBackend = async (): Promise<Category[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/category/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/category/`);
   const responseText = await response.text();
 
   if (!response.ok) {
@@ -178,7 +178,7 @@ export const getCategoriesFromBackend = async (): Promise<Category[]> => {
 
 // Fetch payment preferences list (authenticated)
 export const getPaymentPreferencesFromBackend = async (): Promise<PaymentPreference[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/paymentpref/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/paymentpref/`);
   const responseText = await response.text();
 
   if (!response.ok) {
@@ -191,7 +191,7 @@ export const getPaymentPreferencesFromBackend = async (): Promise<PaymentPrefere
 // Send create task request (authenticated with automatic retry)
 export const createTask = async (task: Omit<Task, 'id'>): Promise<Task> => {
   logger.log('[task API] Creating task on backend with payload:', JSON.stringify(task));
-  const url = `${API_URL}/app/task/`;
+  const url = `${API_URL}/v1/task/`;
 
   const response = await fetchWithAuth(url, {
     method: 'POST',
@@ -325,7 +325,7 @@ export const createTaskChain = async (input: TaskChainInput): Promise<Task> => {
 };
 
 export const getStatusesFromBackend = async (): Promise<Status[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/status/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/status/`);
   const responseText = await response.text();
   logger.log('[task API] Get statuses response status:', response.status);
 
@@ -341,7 +341,7 @@ export const updateTaskStatusOnBackend = async (
   statusId: number
 ): Promise<BackendTask> => {
   logger.log(`[task API] Updating status of task ${taskId} to status ${statusId}`);
-  const url = `${API_URL}/app/task/${taskId}/`;
+  const url = `${API_URL}/v1/task/${taskId}/`;
   const response = await fetchWithAuth(url, {
     method: 'PATCH',
     headers: {
@@ -368,7 +368,7 @@ export const softDeleteTaskOnBackend = async (
   taskId: number
 ): Promise<{ message?: string }> => {
   logger.log(`[task API] Soft-deleting task ${taskId}`);
-  const url = `${API_URL}/app/task/${taskId}/`;
+  const url = `${API_URL}/v1/task/${taskId}/`;
   const response = await fetchWithAuth(url, {
     method: 'DELETE',
     headers: {
@@ -400,7 +400,7 @@ const parseTaskList = (responseText: string): BackendTask[] => {
 };
 
 export const getUserTasksFromBackend = async (userId: number): Promise<BackendTask[]> => {
-  const url = `${API_URL}/app/task/customer/${userId}/`;
+  const url = `${API_URL}/v1/task/customer/${userId}/`;
   const response = await fetchWithAuth(url);
   const responseText = await response.text();
 
@@ -417,7 +417,7 @@ export const getUserTasksFromBackend = async (userId: number): Promise<BackendTa
 };
 
 export const getWorkerTasksFromBackend = async (workerId: number): Promise<BackendTask[]> => {
-  const url = `${API_URL}/app/task/worker/${workerId}/`;
+  const url = `${API_URL}/v1/task/worker/${workerId}/`;
   const response = await fetchWithAuth(url);
   const responseText = await response.text();
 
@@ -435,7 +435,7 @@ export const getWorkerTasksFromBackend = async (workerId: number): Promise<Backe
 };
 
 export const getOpenTasksFromBackend = async (): Promise<BackendTask[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/task/open/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/task/open/`);
   const responseText = await response.text();
 
   if (!response.ok) {
@@ -456,7 +456,7 @@ export const getOpenTasksFromBackend = async (): Promise<BackendTask[]> => {
 };
 
 export const getTaskByIdFromBackend = async (taskId: number): Promise<BackendTask | null> => {
-  const url = `${API_URL}/app/task/${taskId}/`;
+  const url = `${API_URL}/v1/task/${taskId}/`;
   // logger.log(`[getTaskByIdFromBackend] Fetching task ${taskId} from URL: ${url}`);
   const response = await fetchWithAuth(url);
   const responseText = await response.text();

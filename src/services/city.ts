@@ -34,7 +34,7 @@ export const getCities = async (forceRefresh: boolean = false): Promise<City[]> 
 
 const fetchCitiesFromApiAndCache = async (): Promise<City[]> => {
   logger.log('[city API] Fetching cities from backend API...');
-  const response = await fetchWithTimeout(`${API_URL}/app/city/`);
+  const response = await fetchWithTimeout(`${API_URL}/v1/city/`);
   const data = await response.json();
 
   let list: City[] = [];
@@ -52,7 +52,7 @@ const fetchCitiesFromApiAndCache = async (): Promise<City[]> => {
 
 export const createCity = async (countryId: number, name: string): Promise<City> => {
   logger.log(`[city API] Creating city: "${name}" for country: ${countryId}`);
-  const response = await fetchWithTimeout(`${API_URL}/app/city/`, {
+  const response = await fetchWithTimeout(`${API_URL}/v1/city/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

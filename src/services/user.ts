@@ -32,7 +32,7 @@ export interface CreateUserResponse extends User {
 
 export const createUser = async (user: Omit<User, 'id'>): Promise<CreateUserResponse> => {
     logger.log('[createUser API] Sending payload:', JSON.stringify(user, null, 2));
-    const response = await fetchWithTimeout(`${API_URL}/app/register/`, {
+    const response = await fetchWithTimeout(`${API_URL}/v1/register/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -79,7 +79,7 @@ export const createUser = async (user: Omit<User, 'id'>): Promise<CreateUserResp
 };
 
 export const loginUser = async (phone_number: string, password: string): Promise<LoginResponse> => {
-    const url = `${API_URL}/app/login/`;
+    const url = `${API_URL}/v1/login/`;
     logger.log('[loginUser API] Logging in via URL:', url);
     const response = await fetchWithTimeout(url, {
         method: 'POST',
@@ -118,7 +118,7 @@ export interface VerifyUserResponse {
 
 // Verify user account on backend using their user ID
 export const verifyUserOnBackend = async (userId: number): Promise<VerifyUserResponse> => {
-    const url = `${API_URL}/app/user/${userId}/verify/`;
+    const url = `${API_URL}/v1/user/${userId}/verify/`;
     logger.log('[verifyUserOnBackend] Verifying account via URL:', url);
     const response = await fetchWithAuth(url, {
         method: 'PATCH',
@@ -157,7 +157,7 @@ export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> =>
     const cleanPhone = phoneNumber.trim();
     const encodedPhone = encodeURIComponent(cleanPhone);
 
-    let url = `${API_URL}/app/user/phone/?phone_number=${encodedPhone}`;
+    let url = `${API_URL}/v1/user/phone/?phone_number=${encodedPhone}`;
     logger.log('[checkPhoneExists] Request URL:', url);
 
     try {
@@ -170,8 +170,8 @@ export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> =>
 
         if (response.status === 404) {
             const candidates = [
-                `${API_URL}/app/user/check-phone/?phone_number=${encodedPhone}`,
-                `${API_URL}/app/check-phone/?phone_number=${encodedPhone}`,
+                `${API_URL}/v1/user/check-phone/?phone_number=${encodedPhone}`,
+                `${API_URL}/v1/check-phone/?phone_number=${encodedPhone}`,
                 `${API_URL}/check-phone/?phone_number=${encodedPhone}`,
             ];
             for (const candidate of candidates) {
@@ -212,7 +212,7 @@ export const checkPhoneExists = async (phoneNumber: string): Promise<boolean> =>
             try {
                 const data = JSON.parse(responseText);
                 if (data && typeof data.is_registered === 'boolean') return data.is_registered;
-            } catch {}
+            } catch { }
         }
 
         return false;
@@ -226,7 +226,7 @@ export const updateUserOnBackend = async (
     userId: number,
     userDetails: Partial<User>
 ): Promise<User> => {
-    const response = await fetchWithAuth(`${API_URL}/app/update/user/`, {
+    const response = await fetchWithAuth(`${API_URL}/v1/update/user/`, {
         method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
@@ -260,7 +260,7 @@ export const updateProfilePic = async (
         type,
     } as any);
 
-    const response = await fetchWithAuth(`${API_URL}/app/update/user/image/`, {
+    const response = await fetchWithAuth(`${API_URL}/v1/update/user/image/`, {
         method: 'PATCH',
         body: formData,
         headers: {
@@ -301,7 +301,7 @@ export const getUserReviews = async (userId: number, forceRefresh = false): Prom
         return cached.data;
     }
 
-    const response = await fetchWithAuth(`${API_URL}/app/review/`);
+    const response = await fetchWithAuth(`${API_URL}/v1/review/`);
     const responseText = await response.text();
 
     if (!response.ok) {
@@ -322,7 +322,7 @@ export const getUserReviews = async (userId: number, forceRefresh = false): Prom
 
 export const getUserReviewCount = async (userId: number): Promise<number> => {
     try {
-        const url = `${API_URL}/app/review/customer/${userId}/`;
+        const url = `${API_URL}/v1/review/customer/${userId}/`;
         const response = await fetchWithAuth(url);
         if (!response.ok) {
             // logger.warn(`[getUserReviewCount] Non-OK status ${response.status} from ${url}, falling back to getUserReviews`);

@@ -184,7 +184,7 @@ export default function HomeView({ userName }: HomeViewProps) {
     return () => animation.stop();
   }, []);
 
-  // Asynchronously syncs saved user profile location ID (/app/location/{id}/) to position map on user's primary address
+  // Asynchronously syncs saved user profile location ID (/v1/location/{id}/) to position map on user's primary address
   const [isLocationSyncing, setIsLocationSyncing] = useState(false);
   const hasSyncedLocationIdRef = useRef(false);
 

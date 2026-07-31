@@ -12,10 +12,10 @@ export interface UserWallet {
 
 /**
  * Create a new wallet for a user.
- * POST /app/wallet/
+ * POST /v1/wallet/
  */
 export const createWalletForUser = async (userId: number): Promise<UserWallet> => {
-  const url = `${API_URL}/app/wallet/`;
+  const url = `${API_URL}/v1/wallet/`;
   console.log('[Wallet API] Creating wallet for userId:', userId, 'via URL:', url);
 
   const response = await fetchWithAuth(url, {
@@ -51,10 +51,10 @@ export const createWalletForUser = async (userId: number): Promise<UserWallet> =
 /**
  * Fetch wallet information for a specific user.
  * If wallet does not exist (404 or "No Wallet matches"), automatically creates one.
- * GET /app/wallet/{user_id}/
+ * GET /v1/wallet/{user_id}/
  */
 export const getWalletByUserId = async (userId: number): Promise<UserWallet> => {
-  const url = `${API_URL}/app/wallet/${userId}/`;
+  const url = `${API_URL}/v1/wallet/${userId}/`;
   console.log('[Wallet API] Fetching wallet for userId:', userId, 'via URL:', url);
 
   const response = await fetchWithAuth(url);

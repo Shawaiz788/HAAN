@@ -11,14 +11,14 @@ export interface AgoraCallTokenResponse {
 
 /**
  * Fetch dynamic Agora RTC Token & call metadata for a task room from backend:
- * GET ${API_URL}/app/message/room/${taskId}/call-token/
+ * GET ${API_URL}/v1/message/room/${taskId}/call-token/
  */
 export async function fetchAgoraCallToken(
   taskId: number | string,
   userToken?: string
 ): Promise<AgoraCallTokenResponse> {
   try {
-    const fullUrl = `${API_URL}/app/message/room/${taskId}/call-token/`;
+    const fullUrl = `${API_URL}/v1/message/room/${taskId}/call-token/`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };

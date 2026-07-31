@@ -4,7 +4,7 @@ import { logger } from '@/utils/logger';
 
 export const createProEarnings = async (workerId: number | string): Promise<ProEarnings> => {
     //  logger.log(`[proEarnings API] Creating earnings entry for worker ID: ${workerId}`);
-    const response = await fetchWithAuth(`${API_URL}/app/professional/earning/`, {
+    const response = await fetchWithAuth(`${API_URL}/v1/professional/earning/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -31,7 +31,7 @@ export const createProEarnings = async (workerId: number | string): Promise<ProE
 
 export const getProEarnings = async (workerId: number | string): Promise<ProEarnings> => {
     // logger.log(`[proEarnings API] Fetching earnings for worker ID: ${workerId}`);
-    const response = await fetchWithAuth(`${API_URL}/app/professional/earning/${workerId}/`, {
+    const response = await fetchWithAuth(`${API_URL}/v1/professional/earning/${workerId}/`, {
         method: 'GET',
         headers: {
             'Accept': 'application/json',

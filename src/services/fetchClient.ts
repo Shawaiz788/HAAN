@@ -36,7 +36,7 @@ export interface TokenRefreshResult {
 
 // Helper to request a new access token from the backend refresh token endpoint
 export const refreshAccessToken = async (refreshToken: string): Promise<TokenRefreshResult> => {
-    const url = `${API_URL}/app/token/refresh/`;
+    const url = `${API_URL}/v1/token/refresh/`;
     logger.log('[fetchClient] Refreshing access token via URL:', url);
     const response = await fetch(url, {
         method: 'POST',

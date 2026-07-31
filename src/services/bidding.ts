@@ -5,7 +5,7 @@ const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
 
 export const getTaskBids = async (taskId: number): Promise<AdminBidItem[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/bidding/task/${taskId}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/bidding/task/${taskId}/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return [];

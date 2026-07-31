@@ -105,7 +105,7 @@ export function AgoraVoipCallModal({
           ]);
         }
 
-        // Retrieve dynamic call token & metadata from backend: GET /app/message/room/${taskId}/call-token/
+        // Retrieve dynamic call token & metadata from backend: GET /v1/message/room/${taskId}/call-token/
         const tokenData = await fetchAgoraCallToken(taskId, user?.token);
         if (!isActive) return;
 

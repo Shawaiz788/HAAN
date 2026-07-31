@@ -1,7 +1,7 @@
 import { fetchWithAuth, API_URL } from './fetchClient';
 
 async function fetchList<T>(endpoint: string): Promise<T[]> {
-  const response = await fetchWithAuth(`${API_URL}/app/${endpoint}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/${endpoint}/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return [];
@@ -12,7 +12,7 @@ async function fetchList<T>(endpoint: string): Promise<T[]> {
 }
 
 async function createItem<T>(endpoint: string, payload: any): Promise<T> {
-  const response = await fetchWithAuth(`${API_URL}/app/${endpoint}/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/${endpoint}/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -25,7 +25,7 @@ async function createItem<T>(endpoint: string, payload: any): Promise<T> {
 }
 
 async function getItemById<T>(endpoint: string, id: number): Promise<T | null> {
-  const response = await fetchWithAuth(`${API_URL}/app/${endpoint}/${id}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/${endpoint}/${id}/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return null;
@@ -35,7 +35,7 @@ async function getItemById<T>(endpoint: string, id: number): Promise<T | null> {
 }
 
 async function updateItem<T>(endpoint: string, id: number, payload: any): Promise<T> {
-  const response = await fetchWithAuth(`${API_URL}/app/${endpoint}/${id}/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/${endpoint}/${id}/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -48,7 +48,7 @@ async function updateItem<T>(endpoint: string, id: number, payload: any): Promis
 }
 
 async function deleteItem(endpoint: string, id: number): Promise<boolean> {
-  const response = await fetchWithAuth(`${API_URL}/app/${endpoint}/${id}/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/${endpoint}/${id}/`, {
     method: 'DELETE',
   });
   if (!response.ok) {

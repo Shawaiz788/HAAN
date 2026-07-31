@@ -98,7 +98,7 @@ export function PostJobProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
     (async () => {
       try {
-        logger.log(`[PostJobProvider] Syncing customer tasks from backend (/app/task/customer/${userId}/)...`);
+        logger.log(`[PostJobProvider] Syncing customer tasks from backend (/v1/task/customer/${userId}/)...`);
         const backendTasks = await getUserTasksFromBackend(userId);
         if (!isMounted) return;
 

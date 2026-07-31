@@ -6,7 +6,7 @@ const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
 
 export const getCustomerProfile = async (id: number): Promise<CustomerProfile> => {
     console.log(`[customer API] Fetching customer profile for ID: ${id}`);
-    const url = `${API_URL}/app/profile/${id}/`;
+    const url = `${API_URL}/v1/profile/${id}/`;
 
     const response = await fetchWithAuth(url);
     const responseText = await response.text();

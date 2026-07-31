@@ -5,7 +5,7 @@ const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
 
 export const getAllAttachments = async (): Promise<AdminAttachmentItem[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/attachment/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/attachment/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return [];
@@ -16,7 +16,7 @@ export const getAllAttachments = async (): Promise<AdminAttachmentItem[]> => {
 };
 
 export const getAttachmentById = async (id: number): Promise<AdminAttachmentItem | null> => {
-  const response = await fetchWithAuth(`${API_URL}/app/attachment/${id}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/attachment/${id}/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return null;
@@ -26,7 +26,7 @@ export const getAttachmentById = async (id: number): Promise<AdminAttachmentItem
 };
 
 export const getTaskAttachments = async (taskId: number): Promise<AdminAttachmentItem[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/attachment/${taskId}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/attachment/${taskId}/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return [];
@@ -37,7 +37,7 @@ export const getTaskAttachments = async (taskId: number): Promise<AdminAttachmen
 };
 
 export const deleteAttachment = async (id: number): Promise<boolean> => {
-  const response = await fetchWithAuth(`${API_URL}/app/attachment/${id}/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/attachment/${id}/`, {
     method: 'DELETE',
   });
   if (!response.ok) {
@@ -47,7 +47,7 @@ export const deleteAttachment = async (id: number): Promise<boolean> => {
 };
 
 export const updateAttachment = async (id: number, payload: Partial<AdminAttachmentItem>): Promise<AdminAttachmentItem> => {
-  const response = await fetchWithAuth(`${API_URL}/app/attachment/${id}/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/attachment/${id}/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

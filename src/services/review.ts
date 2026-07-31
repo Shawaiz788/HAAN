@@ -6,7 +6,7 @@ const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
 
 export const createReview = async (review: ReviewInput): Promise<ReviewResponse> => {
   console.log('[review API] Submitting review payload to backend:', review);
-  const url = `${API_URL}/app/review/`;
+  const url = `${API_URL}/v1/review/`;
 
   const payload = {
     user_id: review.user_id,

@@ -2,7 +2,7 @@ import { fetchWithAuth, API_URL } from './fetchClient';
 import { BackendTask } from '@/types';
 
 export const getAllTasks = async (): Promise<BackendTask[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/task/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/task/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return [];
@@ -13,7 +13,7 @@ export const getAllTasks = async (): Promise<BackendTask[]> => {
 };
 
 export const getOpenTasks = async (): Promise<BackendTask[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/task/open/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/task/open/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return [];
@@ -24,7 +24,7 @@ export const getOpenTasks = async (): Promise<BackendTask[]> => {
 };
 
 export const getTaskById = async (id: number): Promise<BackendTask | null> => {
-  const response = await fetchWithAuth(`${API_URL}/app/task/${id}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/task/${id}/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return null;
@@ -34,7 +34,7 @@ export const getTaskById = async (id: number): Promise<BackendTask | null> => {
 };
 
 export const updateTask = async (id: number, data: Partial<BackendTask>): Promise<BackendTask> => {
-  const response = await fetchWithAuth(`${API_URL}/app/task/${id}/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/task/${id}/`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -47,7 +47,7 @@ export const updateTask = async (id: number, data: Partial<BackendTask>): Promis
 };
 
 export const deleteTask = async (id: number): Promise<boolean> => {
-  const response = await fetchWithAuth(`${API_URL}/app/task/${id}/`, {
+  const response = await fetchWithAuth(`${API_URL}/v1/task/${id}/`, {
     method: 'DELETE',
   });
   if (!response.ok) {
@@ -57,7 +57,7 @@ export const deleteTask = async (id: number): Promise<boolean> => {
 };
 
 export const getCustomerTasks = async (userId: number): Promise<BackendTask[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/task/customer/${userId}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/task/customer/${userId}/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return [];
@@ -68,7 +68,7 @@ export const getCustomerTasks = async (userId: number): Promise<BackendTask[]> =
 };
 
 export const getWorkerTasks = async (workerId: number): Promise<BackendTask[]> => {
-  const response = await fetchWithAuth(`${API_URL}/app/task/worker/${workerId}/`);
+  const response = await fetchWithAuth(`${API_URL}/v1/task/worker/${workerId}/`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 404) return [];

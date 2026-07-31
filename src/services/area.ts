@@ -34,7 +34,7 @@ export const getAreas = async (forceRefresh: boolean = false): Promise<Area[]> =
 
 const fetchAreasFromApiAndCache = async (): Promise<Area[]> => {
   logger.log('[area API] Fetching areas from backend API...');
-  const response = await fetchWithTimeout(`${API_URL}/app/area/`);
+  const response = await fetchWithTimeout(`${API_URL}/v1/area/`);
   const data = await response.json();
 
   let list: Area[] = [];
@@ -52,7 +52,7 @@ const fetchAreasFromApiAndCache = async (): Promise<Area[]> => {
 
 export const createArea = async (cityId: number, name: string): Promise<Area> => {
   logger.log(`[area API] Creating area: "${name}" for city: ${cityId}`);
-  const response = await fetchWithTimeout(`${API_URL}/app/area/`, {
+  const response = await fetchWithTimeout(`${API_URL}/v1/area/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
