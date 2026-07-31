@@ -110,7 +110,9 @@ export default function ProLiveJobsView() {
                             title: activeBackendTask.subject || 'Active Task',
                             description: activeBackendTask.body || '',
                             category: 'Active Service',
+                            subcategory: (activeBackendTask as any).subcategory,
                             budget: activeBackendTask.price,
+                            payment_preference_id: activeBackendTask.payment_preference_id,
                             location_name: 'Customer Location',
                             customer_id: activeBackendTask.created_by,
                             customer_name: (activeBackendTask as any).customer_name || 'Customer',
@@ -161,6 +163,7 @@ export default function ProLiveJobsView() {
             description: 'Accepted Task',
             category: 'Active Service',
             budget: Number(bidPayload?.price || 0),
+            payment_preference_id: bidPayload?.payment_preference_id,
             location_name: 'Customer Location',
             customer_id: bidPayload?.created_by || 1,
             customer_name: 'Customer',
@@ -169,6 +172,7 @@ export default function ProLiveJobsView() {
         const assigned: LiveJob = {
             ...baseJob,
             budget: bidPayload?.price ? Number(bidPayload.price) : baseJob.budget,
+            payment_preference_id: bidPayload?.payment_preference_id ?? baseJob.payment_preference_id,
         };
 
         setAssignedJob(assigned);
@@ -208,11 +212,14 @@ export default function ProLiveJobsView() {
                 }
 
                 const enrichedJob: LiveJob = {
+                    ...assigned,
                     id: taskData.id ?? Number(jobId),
                     title: taskData.subject || assigned.title,
                     description: taskData.body || assigned.description,
                     category: 'Active Service',
+                    subcategory: (taskData as any).subcategory ?? assigned.subcategory,
                     budget: taskData.price ?? assigned.budget,
+                    payment_preference_id: taskData.payment_preference_id ?? assigned.payment_preference_id,
                     location_name: locName,
                     customer_id: customerId,
                     customer_name: cName,
