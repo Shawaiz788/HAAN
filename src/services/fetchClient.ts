@@ -178,9 +178,9 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}): Pro
         }
     }
 
-    // If unauthorized (401), perform a token refresh and retry once
-    if (response.status === 401) {
-        logger.log('[fetchClient] Access token invalid/expired (401). Attempting refresh...');
+    // If unauthorized (401 or 403), perform a token refresh and retry once
+    if (response.status === 401 || response.status === 403) {
+        logger.log(`[fetchClient] Access token invalid/expired (${response.status}). Attempting refresh...`);
         const refreshToken = await SecureStore.getItemAsync('user_refresh_token');
 
         if (refreshToken) {

@@ -4,10 +4,10 @@ import {
   View,
   Pressable,
   Modal,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AuthenticatedImage from '@/components/common/AuthenticatedImage';
 import { styles } from '@/styles/cnicImagePreviewModal.styles';
 
 interface CnicImagePreviewModalProps {
@@ -47,8 +47,8 @@ export default function CnicImagePreviewModal({
 
         {/* Center Image Container */}
         <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: imageUri }}
+          <AuthenticatedImage
+            uri={imageUri}
             style={styles.fullImage}
             resizeMode="contain"
           />

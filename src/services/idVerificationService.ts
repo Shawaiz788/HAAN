@@ -13,7 +13,6 @@ const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
  * Returns attachment ID
  */
 export const createSingleAttachment = async (uri: string): Promise<number | string> => {
-  console.log(`[IdVerificationService] Uploading attachment file: ${uri} to ${API_URL}/v1/attachment/`);
   const formData = new FormData();
   const filename = uri.split('/').pop() || 'cnic_doc.jpg';
   const match = /\.(\w+)$/.exec(filename);
@@ -37,8 +36,6 @@ export const createSingleAttachment = async (uri: string): Promise<number | stri
   });
 
   const responseText = await response.text();
-  console.log(`[IdVerificationService] Upload attachment response status: ${response.status}, body:`, responseText);
-
   if (!response.ok) {
     throw new Error(`Status ${response.status}: ${responseText || 'File upload rejected by server'}`);
   }
@@ -54,12 +51,10 @@ export const createSingleAttachment = async (uri: string): Promise<number | stri
 export const idVerificationService: IdVerificationService = {
   getVerificationStatus: async (userId: number): Promise<VerificationRecord> => {
     const url = `${API_URL}/v1/profile/${userId}/`;
-    console.log(`[IdVerificationService] Live status request for userId ${userId} from ${url}`);
 
     try {
       const response = await fetchWithAuth(url);
       const responseText = await response.text();
-      console.log(`[IdVerificationService] Response status: ${response.status}, body:`, responseText);
 
       if (response.ok) {
         const data = JSON.parse(responseText);
@@ -91,10 +86,6 @@ export const idVerificationService: IdVerificationService = {
           status = 'pending';
         }
 
-        console.log(`[IdVerificationService] Raw is_verified: ${JSON.stringify(data.is_verified)} -> evaluated isVerifiedBool: ${isVerifiedBool}`);
-        console.log(`[IdVerificationService] frontId: ${frontId}, backId: ${backId}`);
-        console.log(`[IdVerificationService] Resolved live status: ${status}`);
-
         return {
           status,
           fullName: data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim(),
@@ -107,10 +98,9 @@ export const idVerificationService: IdVerificationService = {
         };
       }
     } catch (e) {
-      console.warn('[IdVerificationService] Live profile status fetch error:', e);
+      console.warn('[IdVerificationService] Profile status fetch warning:', e);
     }
 
-    // Default unsubmitted status if fetch fails or network unavailable
     return {
       status: 'unsubmitted',
     };
@@ -120,16 +110,12 @@ export const idVerificationService: IdVerificationService = {
     userId: number,
     payload: IdVerificationPayload
   ): Promise<VerificationRecord> => {
-    console.log(`[IdVerificationService] Submitting verification for userId ${userId}...`);
-
     // 1. Upload Front Attachment if present
     let frontAttachmentId: number | string | null = null;
     if (payload.frontUri && !payload.frontUri.startsWith('http')) {
       try {
         frontAttachmentId = await createSingleAttachment(payload.frontUri);
-        console.log(`[IdVerificationService] Front attachment uploaded ID: ${frontAttachmentId}`);
       } catch (e: any) {
-        console.error('[IdVerificationService] Front attachment upload failed:', e);
         throw new Error(`CNIC Front photo upload failed (${e?.message || 'Server error'}). Please re-select/capture photo and try again.`);
       }
     }
@@ -139,28 +125,52 @@ export const idVerificationService: IdVerificationService = {
     if (payload.backUri && !payload.backUri.startsWith('http')) {
       try {
         backAttachmentId = await createSingleAttachment(payload.backUri);
-        console.log(`[IdVerificationService] Back attachment uploaded ID: ${backAttachmentId}`);
       } catch (e: any) {
-        console.error('[IdVerificationService] Back attachment upload failed:', e);
         throw new Error(`CNIC Back photo upload failed (${e?.message || 'Server error'}). Please re-select/capture photo and try again.`);
       }
     }
 
-    // 3. Update User Profile with verify_attachment_id_front & verify_attachment_id_back
+    // 3. Update User Profile using /v1/user/add-verify/ endpoint
     const profilePayload: Record<string, any> = {};
     if (frontAttachmentId) profilePayload.verify_attachment_id_front = frontAttachmentId;
     if (backAttachmentId) profilePayload.verify_attachment_id_back = backAttachmentId;
 
     if (Object.keys(profilePayload).length > 0) {
-      console.log(`[IdVerificationService] Updating user profile with attachment IDs:`, profilePayload);
-      const profileRes = await fetchWithAuth(`${API_URL}/v1/update/user/`, {
-        method: 'PATCH',
+      const addVerifyUrl = `${API_URL}/v1/user/add-verify/`;
+
+      let profileRes = await fetchWithAuth(addVerifyUrl, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profilePayload),
       });
 
+      if (!profileRes.ok && (profileRes.status === 405 || profileRes.status === 404)) {
+        profileRes = await fetchWithAuth(addVerifyUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profilePayload),
+        });
+      }
+
+      if (!profileRes.ok && (profileRes.status === 405 || profileRes.status === 404)) {
+        const noSlashUrl = `${API_URL}/v1/user/add-verify`;
+        profileRes = await fetchWithAuth(noSlashUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profilePayload),
+        });
+      }
+
+      if (!profileRes.ok && (profileRes.status === 405 || profileRes.status === 404)) {
+        const legacyUrl = `${API_URL}/v1/update/user/`;
+        profileRes = await fetchWithAuth(legacyUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profilePayload),
+        });
+      }
+
       const responseText = await profileRes.text();
-      console.log(`[IdVerificationService] Profile update response status: ${profileRes.status}, body:`, responseText);
 
       if (!profileRes.ok) {
         throw new Error(`Failed to update profile verification IDs (Status ${profileRes.status}): ${responseText}`);

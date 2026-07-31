@@ -1,4 +1,5 @@
 import { fetchWithAuth } from './fetchClient';
+import { normalizeImageUrl } from './customer';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 const API_URL = BASE_URL ? BASE_URL.replace(/\/$/, '') : '';
@@ -20,6 +21,68 @@ export interface AdminUnverifiedUserItem {
 }
 
 /**
+ * Cache for all attachments list to avoid duplicate requests during batch processing
+ */
+let cachedAttachmentsList: any[] | null = null;
+let lastAttachmentsFetchTime = 0;
+
+const fetchAllAttachmentsList = async (): Promise<any[]> => {
+  const now = Date.now();
+  if (cachedAttachmentsList && now - lastAttachmentsFetchTime < 10000) {
+    return cachedAttachmentsList;
+  }
+  try {
+    const response = await fetchWithAuth(`${API_URL}/v1/attachment/`);
+    const text = await response.text();
+
+    if (response.ok) {
+      const parsed = JSON.parse(text);
+      const list: any[] = Array.isArray(parsed) ? parsed : parsed.results || parsed.attachments || [];
+      cachedAttachmentsList = list;
+      lastAttachmentsFetchTime = now;
+      return list;
+    }
+  } catch (e) {
+    console.warn('[AdminUnverifiedUsers] Failed to fetch attachments list:', e);
+  }
+  return [];
+};
+
+/**
+ * Fetch and resolve direct media file URL for an attachment ID
+ */
+export const resolveAttachmentMediaUrl = async (
+  attachmentId: number | string | null
+): Promise<string | undefined> => {
+  if (!attachmentId || attachmentId === 0 || attachmentId === '0') return undefined;
+
+  const targetId = Number(attachmentId);
+
+  try {
+    const list = await fetchAllAttachmentsList();
+    const match = list.find((a) => Number(a.id || a.attachment_id) === targetId);
+
+    if (match) {
+      const raw =
+        match.file ||
+        match.url ||
+        match.image ||
+        match.file_path ||
+        match.attachment_url ||
+        (match.attachment && (match.attachment.file || match.attachment.url));
+      if (raw) {
+        return normalizeImageUrl(raw);
+      }
+    }
+  } catch (e) {
+    console.warn(`[AdminUnverifiedUsers] Attachment lookup error for ID ${attachmentId}:`, e);
+  }
+
+  // Fallback to direct endpoint if not found in list
+  return `${API_URL}/v1/attachment/${attachmentId}/`;
+};
+
+/**
  * Fetch unverified users list (Admin only)
  * Endpoint: GET /v1/admin/unverified/
  * Uses user ID to query full profile details (/v1/admin/get/users/{id} or /v1/profile/{id})
@@ -33,6 +96,9 @@ export const getAdminUnverifiedUsers = async (): Promise<AdminUnverifiedUserItem
     if (response.ok) {
       const data = JSON.parse(text);
       const list: any[] = Array.isArray(data) ? data : data.results || data.users || [];
+
+      // Pre-warm attachments list cache
+      await fetchAllAttachmentsList();
 
       // Fetch user profiles & attachment details in parallel
       const enrichedList = await Promise.all(
@@ -68,10 +134,10 @@ export const getAdminUnverifiedUsers = async (): Promise<AdminUnverifiedUserItem
               roleName = usertype_id === 3 ? 'Worker' : usertype_id === 1 ? 'Admin' : 'Customer';
               profile_pic = uData.profile_pic || uData.image || profile_pic;
 
-              if (!frontId) {
+              if (!frontId || frontId === 0) {
                 frontId = uData.verify_attachment_id_front ?? uData.verify_attachment_front ?? uData.attachment_id_front ?? null;
               }
-              if (!backId) {
+              if (!backId || backId === 0) {
                 backId = uData.verify_attachment_id_back ?? uData.verify_attachment_back ?? uData.attachment_id_back ?? null;
               }
             }
@@ -79,8 +145,11 @@ export const getAdminUnverifiedUsers = async (): Promise<AdminUnverifiedUserItem
             console.log(`[AdminUnverifiedUsers] User profile fetch warning for ID ${userId}:`, e);
           }
 
-          const frontUrl = item.front_image_url || (frontId ? `${API_URL}/v1/attachment/${frontId}/` : undefined);
-          const backUrl = item.back_image_url || (backId ? `${API_URL}/v1/attachment/${backId}/` : undefined);
+          // Resolve direct media file URLs for attachments
+          const [frontUrl, backUrl] = await Promise.all([
+            item.front_image_url ? Promise.resolve(normalizeImageUrl(item.front_image_url)) : resolveAttachmentMediaUrl(frontId),
+            item.back_image_url ? Promise.resolve(normalizeImageUrl(item.back_image_url)) : resolveAttachmentMediaUrl(backId),
+          ]);
 
           return {
             id: userId,

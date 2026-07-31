@@ -5,7 +5,6 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Image,
   ActivityIndicator,
   Alert,
   ToastAndroid,
@@ -17,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AdminDrawerPanel from '@/components/admin/AdminDrawerPanel';
 import CnicImagePreviewModal from '@/components/admin/CnicImagePreviewModal';
+import AuthenticatedImage from '@/components/common/AuthenticatedImage';
 import {
   useAdminUnverifiedUsers,
   useVerifyAdminUser,
@@ -212,7 +212,11 @@ export default function AdminUnverifiedUsersView() {
                         )
                       }
                     >
-                      <Image source={{ uri: userItem.front_image_url }} style={styles.thumbImage} resizeMode="cover" />
+                      <AuthenticatedImage
+                        uri={userItem.front_image_url}
+                        style={styles.thumbImage}
+                        resizeMode="cover"
+                      />
                       <View style={styles.zoomBadge}>
                         <Ionicons name="expand-outline" size={14} color="#FFFFFF" />
                       </View>
@@ -241,7 +245,11 @@ export default function AdminUnverifiedUsersView() {
                         )
                       }
                     >
-                      <Image source={{ uri: userItem.back_image_url }} style={styles.thumbImage} resizeMode="cover" />
+                      <AuthenticatedImage
+                        uri={userItem.back_image_url}
+                        style={styles.thumbImage}
+                        resizeMode="cover"
+                      />
                       <View style={styles.zoomBadge}>
                         <Ionicons name="expand-outline" size={14} color="#FFFFFF" />
                       </View>
