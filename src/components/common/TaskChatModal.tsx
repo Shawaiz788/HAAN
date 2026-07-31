@@ -298,7 +298,7 @@ export function TaskChatModal({
           <View style={styles.systemInfoPill}>
             <Ionicons name="lock-closed-outline" size={12} color="#6B7280" style={{ marginRight: 4 }} />
             <Text style={styles.systemInfoText}>
-              In-app messages for Task #{taskId || ''} are encrypted and active during session.
+              In-app messages are encrypted and active during session.
             </Text>
           </View>
 

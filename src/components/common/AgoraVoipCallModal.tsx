@@ -223,13 +223,7 @@ export function AgoraVoipCallModal({
               <Text style={styles.headerTitle}>KaamKarwao Voice Call</Text>
             </View>
 
-            {taskId ? (
-              <View style={styles.taskBadge}>
-                <Text style={styles.taskBadgeText}>Task #{taskId}</Text>
-              </View>
-            ) : (
-              <View style={{ width: 38 }} />
-            )}
+            <View style={{ width: 38 }} />
           </View>
 
           {/* Profile Section */}

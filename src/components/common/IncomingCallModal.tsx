@@ -76,9 +76,6 @@ export function IncomingCallModal({
               <Ionicons name="call" size={16} color="#10B981" />
               <Text style={styles.brandBadgeText}>INCOMING VOICE CALL</Text>
             </View>
-            <View style={styles.taskBadge}>
-              <Text style={styles.taskLabel}>Task #{callData.taskId}</Text>
-            </View>
           </View>
 
           {/* Pulsing Avatar & Caller Info */}
