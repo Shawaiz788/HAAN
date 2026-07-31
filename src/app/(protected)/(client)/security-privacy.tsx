@@ -198,7 +198,7 @@ export default function SecurityPrivacyScreen() {
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </Pressable>
-          <Text style={styles.headerTitle}>Security & Privacy</Text>
+          <Text style={styles.headerTitle}>Security & Permissions</Text>
         </View>
       </View>
 

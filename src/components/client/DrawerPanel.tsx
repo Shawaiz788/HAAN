@@ -200,7 +200,7 @@ export default function DrawerPanel({
             }}
           >
             <Ionicons name="shield-checkmark-outline" size={20} color="#374151" style={styles.drawerItemIcon} />
-            <Text style={styles.drawerItemLabel}>Security & Privacy</Text>
+            <Text style={styles.drawerItemLabel}>Security & Permissions</Text>
           </Pressable>
 
           <Pressable
