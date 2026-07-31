@@ -109,219 +109,28 @@ The application follows a **layered architecture** with clear separation of conc
 
 ```
 KaamKarwao/
-├── .agents/                        # AI agent rules & workspace config
-│   └── AGENTS.md                   # Project rules (SOLID, 500-line limit, git push control)
-├── assets/                         # App icons, splash screens, showcase banners
+├── assets/                         # App icons, splash screens, assets
 ├── src/
-│   ├── app/                        # 📱 Expo Router — File-Based Navigation
-│   │   ├── _layout.tsx             # Root layout (QueryClient, AuthProvider, ErrorBoundary, ThemeProvider)
-│   │   ├── index.tsx               # Welcome / language selection screen
-│   │   ├── (onboarding)/           # First-time user onboarding carousel
-│   │   ├── (auth)/                 # Authentication flow
-│   │   │   ├── sign-in.tsx         # Phone + password sign-in with step indicators
-│   │   │   ├── sign-up.tsx         # Registration with Firebase phone verification
-│   │   │   └── verify.tsx          # OTP verification screen
-│   │   └── (protected)/            # Auth-guarded route group
-│   │       ├── _layout.tsx         # Session guard (redirects unauthenticated users)
-│   │       ├── profile-setup.tsx   # Post-registration profile completion
-│   │       ├── (tabs)/             # Client bottom tab navigator
-│   │       ├── (client)/           # Client-specific screens
-│   │       │   ├── home.tsx        # → HomeView (map, categories, task posting)
-│   │       │   ├── task-history.tsx # → TaskHistoryView
-│   │       │   ├── wallet.tsx      # → WalletView
-│   │       │   ├── edit-profile.tsx
-│   │       │   ├── saved-addresses.tsx
-│   │       │   ├── security-privacy.tsx
-│   │       │   └── support-help.tsx
-│   │       ├── (pro)/              # Professional-specific screens
-│   │       │   ├── _layout.tsx     # Pro guard (usertype_id === 3)
-│   │       │   ├── live-jobs.tsx   # → ProLiveJobsView (default landing)
-│   │       │   ├── dashboard.tsx   # → ProDashboardView
-│   │       │   ├── job-history.tsx # Job history with status filtering
-│   │       │   ├── earnings.tsx    # Earnings breakdown
-│   │       │   └── wallet.tsx      # → WalletView
-│   │       └── (admin)/            # Admin-specific screens
-│   │           ├── _layout.tsx     # Admin guard (usertype_id === 1)
-│   │           ├── dashboard.tsx   # → AdminDashboardView
-│   │           ├── users.tsx       # → AdminUsersView
-│   │           ├── tasks.tsx       # → AdminTasksView
-│   │           ├── bids.tsx        # → AdminBidsView
-│   │           ├── categories.tsx  # → AdminCategoriesView
-│   │           ├── reviews.tsx     # → AdminReviewsView
-│   │           ├── earnings.tsx    # → AdminEarningsView
-│   │           ├── financials.tsx  # → AdminFinancialsView
-│   │           ├── attachments.tsx # → AdminAttachmentsView
-│   │           ├── masterdata.tsx  # → AdminMasterDataView
-│   │           ├── pro-detail.tsx  # → AdminProDetailView
-│   │           └── settings.tsx    # → AdminSettingsView
-│   │
-│   ├── components/                 # 🧩 Reusable UI Components
-│   │   ├── CustomButton.tsx        # Styled pressable button
-│   │   ├── CustomInput.tsx         # Themed text input
-│   │   ├── ErrorBoundary.tsx       # React error boundary with fallback UI
-│   │   ├── ReviewModal.tsx         # Submit review modal
-│   │   ├── UserReviewsModal.tsx    # View user reviews modal
-│   │   ├── common/                 # Shared modals & primitives
-│   │   │   ├── TaskChatModal.tsx   # Task chat modal with image attachments & VoIP trigger
-│   │   │   ├── ChatMessageBubble.tsx # Message bubble for text & image attachments
-│   │   │   ├── ChatImagePreviewModal.tsx # Full-screen image lightbox preview
-│   │   │   ├── AgoraVoipCallModal.tsx # Native Agora RTC voice calling modal
-│   │   │   └── IncomingCallModal.tsx  # Incoming ringing call modal
-│   │   ├── client/                 # Client-specific components
-│   │   │   ├── HomeMapView.tsx     # Leaflet/WebView map with pin adjustment
-│   │   │   ├── HomeBottomSheet.tsx # Task posting bottom sheet (category, budget, description)
-│   │   │   ├── HomeCategoryList.tsx # Category grid/horizontal list with selection states
-│   │   │   ├── DrawerPanel.tsx     # Client navigation drawer
-│   │   │   ├── PinAdjusterModal.tsx # Map pin location fine-tuning
-│   │   │   ├── SearchLocationModal.tsx # Nominatim address search
-│   │   │   ├── ClientBidsList.tsx  # Incoming bid cards display
-│   │   │   ├── AcceptedProCard.tsx # Accepted professional info card
-│   │   │   ├── TaskSummaryCard.tsx # Task overview card
-│   │   │   ├── ClientChatModal.tsx # In-app chat with professional
-│   │   │   ├── CancelProgressModal.tsx
-│   │   │   └── SavedAddressForm.tsx
-│   │   ├── pro/                    # Professional-specific components
-│   │   │   ├── JobCard.tsx         # Live job listing card with bid actions
-│   │   │   ├── JobDetailBottomSheet.tsx # Detailed job view with bidding
-│   │   │   ├── jobDetailBottomSheet/   # Sub-components (Header, Description, Bidding sections)
-│   │   │   ├── ProDrawerPanel.tsx  # Pro navigation drawer with online toggle
-│   │   │   ├── ProActiveTaskModal.tsx  # Active task execution modal
-│   │   │   ├── ProLiveJobsStates.tsx   # Empty/offline/loading state views
-│   │   │   ├── ActiveBidListener.tsx   # WebSocket bid acceptance listener
-│   │   │   └── ImagePreviewOverlay.tsx
-│   │   ├── admin/                  # Admin panel components
-│   │   │   ├── AdminDrawerPanel.tsx
-│   │   │   ├── AdminHeader.tsx
-│   │   │   ├── AdminStatCard.tsx
-│   │   │   ├── CategoryModal.tsx
-│   │   │   ├── CreateUserModal.tsx
-│   │   │   ├── TaskDetailModal.tsx
-│   │   │   ├── UserDetailModal.tsx
-│   │   │   ├── category/           # CategoryCard, IconColorPicker, SubCategoryModal
-│   │   │   └── common/             # Shared admin UI primitives
-│   │   ├── profile-setup/          # Profile setup form components
-│   │   │   ├── RoleSelector.tsx    # Client/Provider/Admin role picker
-│   │   │   ├── GenderSelector.tsx
-│   │   │   ├── DropdownSelector.tsx
-│   │   │   ├── GpsCoordinatesField.tsx
-│   │   │   ├── MapPickerModal.tsx  # Leaflet map for location selection
-│   │   │   └── leafletHtml.ts      # Leaflet HTML template string
-│   │   └── wallet/
-│   │       └── WalletView.tsx      # Shared wallet component (client & pro)
-│   │
-│   ├── hooks/                      # 🪝 Custom React Hooks
-│   │   ├── useTaskChatWebSocket.ts # Task chat WebSocket + attachment caching & resolution
-│   │   ├── useProWebSocket.ts      # Global singleton WebSocket for live job feed
-│   │   ├── useBiddingWebSocket.ts  # Per-task bidding WebSocket channel
-│   │   ├── useHomeViewLocation.ts  # GPS + geocoding + MMKV location persistence
-│   │   ├── useHomeViewTaskPost.ts  # Task creation orchestration hook
-│   │   ├── useProLiveLocation.ts   # Professional GPS tracking
-│   │   ├── useActiveBids.ts        # Active bid state management
-│   │   ├── useProfileSubmit.ts     # Profile setup form submission
-│   │   ├── useRouteByUserType.ts   # Post-auth routing by user role
-│   │   └── admin/
-│   │       └── useAdminDashboard.ts # TanStack Query hook for admin KPIs
-│   │
-│   ├── pages/                      # 📄 Full-Screen View Components
-│   │   ├── client/
-│   │   │   ├── HomeView.tsx        # Main client screen (map + categories + task flow)
-│   │   │   ├── ActiveTaskScreen.tsx # Active task with bids, chat, and status tracking
-│   │   │   ├── TaskHistoryView.tsx # Past tasks with status badges
-│   │   │   └── ProfileView.tsx     # Client profile & settings
-│   │   ├── pro/
-│   │   │   ├── ProLiveJobsView.tsx # Live job feed with WebSocket + online toggle
-│   │   │   └── ProDashboardView.tsx # Earnings charts, stats, quick actions
-│   │   └── admin/                  # 12 admin module screens
-│   │       ├── AdminDashboardView.tsx
-│   │       ├── AdminUsersView.tsx
-│   │       ├── AdminTasksView.tsx
-│   │       ├── AdminBidsView.tsx
-│   │       ├── AdminCategoriesView.tsx
-│   │       ├── AdminReviewsView.tsx
-│   │       ├── AdminEarningsView.tsx
-│   │       ├── AdminFinancialsView.tsx
-│   │       ├── AdminAttachmentsView.tsx
-│   │       ├── AdminMasterDataView.tsx  # CRUD for 9 data tables
-│   │       ├── AdminProDetailView.tsx
-│   │       └── AdminSettingsView.tsx
-│   │
-│   ├── services/                   # 🌐 API Service Layer
-│   │   ├── fetchClient.ts          # Core HTTP client (timeout, auth headers, JWT refresh, 401 retry)
-│   │   ├── agoraService.ts         # Dynamic Agora RTC call token fetch (/app/message/room/{id}/call-token/)
-│   │   ├── task.ts                 # Task CRUD, chain creation, attachment upload, getAttachmentById
-│   │   ├── user.ts                 # User registration, login, profile updates
-│   │   ├── bidding.ts              # Bid placement API
-│   │   ├── wallet.ts               # Wallet GET/POST with auto-creation
-│   │   ├── category.ts             # Categories & subcategories API
-│   │   ├── location.ts             # Location chain creation & lookup
-│   │   ├── customer.ts             # Customer profile & image normalization
-│   │   ├── review.ts               # Review submission
-│   │   ├── geofenceService.ts      # Polygon geofencing with ray-casting algorithm
-│   │   ├── notificationService.ts  # Push notification registration & display
-│   │   ├── proEarnings.ts          # Professional earnings API
-│   │   ├── attachment.ts           # File upload & attachment API
-│   │   ├── country.ts / city.ts / area.ts # Geographic hierarchy APIs
-│   │   ├── masterData.ts           # Admin master data CRUD
-│   │   ├── adminUsers.ts           # Admin user management API
-│   │   ├── adminTasks.ts           # Admin task operations API
-│   │   ├── adminEarnings.ts        # Admin earnings API
-│   │   └── adminReviews.ts         # Admin reviews API
-│   │
-│   ├── store/                      # 🗃️ Global State Stores (Zustand + MMKV)
-│   │   ├── taskStore.ts            # Task history & active task (MMKV-persisted, per-user)
-│   │   ├── categoryStore.ts        # Categories & subcategories (lazy-loaded from API)
-│   │   ├── locationStore.ts        # Last-known location (MMKV-persisted)
-│   │   ├── paymentStore.ts         # Payment preferences (MMKV-cached)
-│   │   ├── proOnlineStore.ts       # Professional online/offline status (MMKV-persisted)
-│   │   ├── proEarningsStore.ts     # Professional earnings cache
-│   │   └── proTaskStore.ts         # Professional task state
-│   │
-│   ├── context/                    # ⚛️ React Context Providers
-│   │   ├── auth.tsx                # AuthProvider — session, login, logout, JWT sync
-│   │   └── post-job.tsx            # PostJobProvider — task creation, bidding, chat state machine
-│   │
-│   ├── styles/                     # 🎨 Extracted StyleSheet Files
-│   │   ├── taskChatModal.styles.ts # Chat modal & attachment bubble styles
-│   │   ├── agoraVoipCallModal.styles.ts # VoIP call UI styles
-│   │   ├── homeView.styles.ts      # Client home screen styles
-│   │   ├── activeTaskScreen.styles.ts
-│   │   ├── proLiveJobsView.styles.ts
-│   │   ├── proDashboardView.styles.ts
-│   │   ├── jobDetailBottomSheet.styles.ts
-│   │   ├── proActiveTaskModal.styles.ts
-│   │   ├── profileSetup.styles.ts
-│   │   ├── onboarding.styles.ts
-│   │   ├── verify.styles.ts
-│   │   ├── wallet.styles.ts
-│   │   ├── savedAddresses.styles.ts
-│   │   ├── adminUsersView.styles.ts
-│   │   ├── adminMasterDataView.styles.ts
-│   │   └── userDetailModal.styles.ts
-│   │
-│   ├── types/                      # 📝 TypeScript Interfaces
-│   │   ├── index.ts                # Core types (User, AppUser, Task, Bid, LiveJob, etc.)
-│   │   ├── category.ts             # Category & SubCategory interfaces
-│   │   └── admin.ts                # Admin-specific types
-│   │
-│   ├── constants/                  # 📌 App Constants
-│   │   ├── colors.ts               # Design tokens — brand, pro, neutral, semantic palettes
-│   │   ├── userTypes.ts            # USER_TYPE_ADMIN=1, USER_TYPE_CLIENT=2, USER_TYPE_PRO=3
-│   │   ├── taskStatus.ts           # OPEN=1, ACCEPTED=2, CANCELLED_BY_SYSTEM=3, COMPLETED=4, CANCELLED=5
-│   │   ├── locationData.ts         # Default location coordinates
-│   │   ├── mockData.ts             # Development mock data
-│   │   └── mockJobs.ts             # Mock job listings for testing
-│   │
-│   └── utils/                      # 🔧 Pure Utility Functions
-│       ├── logger.ts               # Dev-only console logger (suppresses in production)
-│       ├── taskMapper.ts           # BackendTask → local Task transformation
-│       ├── distanceUtils.ts        # Haversine formula for distance calculation
-│       └── attachmentUtils.ts      # File attachment helpers
-│
-├── app.config.js                   # Expo config (Firebase, Google Maps, EAS)
-├── tsconfig.json                   # TypeScript configuration with path aliases (@/)
-├── babel.config.js                 # Babel with expo preset
+│   ├── app/                        # 📱 Expo Router file-based navigation & route groups
+│   │   ├── (auth)/                 # Sign-in, Sign-up, and Phone OTP verification
+│   │   └── (protected)/            # Role-guarded route groups ((client), (pro), (admin))
+│   ├── components/                 # 🧩 Reusable UI components & role-specific sub-modals
+│   │   ├── common/                 # Shared modals (Task Chat, Agora VoIP Calling, Lightbox)
+│   │   ├── client/                 # Customer components (Home Map, Task Posting, Bids)
+│   │   ├── pro/                    # Professional components (Job Cards, Active Task Modal)
+│   │   └── admin/                  # Control panel dashboard & master data UI primitives
+│   ├── context/                    # ⚛️ React Context Providers (Session Auth, Job Lifecycle)
+│   ├── hooks/                      # 🪝 Custom Hooks (WebSockets, Geolocation, Bidding, Routing)
+│   ├── pages/                      # 📄 Full-screen view components (Client, Pro, Admin screens)
+│   ├── services/                   # 🌐 API service repositories (Auth, Tasks, Agora RTC, Geofence)
+│   ├── store/                      # 🗃️ Zustand global state stores with MMKV persistence
+│   ├── styles/                     # 🎨 Extracted StyleSheet modules per view
+│   ├── types/                      # 📝 TypeScript domain models & API response interfaces
+│   ├── constants/                  # 📌 Design tokens (colors), status enums, role definitions
+│   └── utils/                      # 🔧 Utility functions (distance math, attachment resolution)
+├── app.config.js                   # Expo & native build configuration
 ├── .env.example                    # Environment variable template
-└── package.json                    # Dependencies & scripts
+└── package.json                    # Dependencies & build scripts
 ```
 
 ---
@@ -340,32 +149,29 @@ graph TD
     B -->|Yes| G{"Profile complete?"}
     G -->|No| H["/(protected)/profile-setup"]
     G -->|Yes| I{"User Type?"}
-    I -->|"Client (2)"| J["/(protected)/(client)/home"]
-    I -->|"Pro (3)"| K["/(protected)/(pro)/live-jobs"]
-    I -->|"Admin (1)"| L["/(protected)/(admin)/dashboard"]
+    I -->|"Customer"| J["/(protected)/(client)/home"]
+    I -->|"Pro"| K["/(protected)/(pro)/live-jobs"]
+    I -->|"Admin"| L["/(protected)/(admin)/dashboard"]
 ```
 
 ### Centralized Navigation Hook (`useRouteByUserType`)
 
-Post-authentication and initial session routing is orchestrated by the `useRouteByUserType` custom hook ([useRouteByUserType.ts](file:///c:/Users/Fahad/Documents/KaamKarwao/src/hooks/useRouteByUserType.ts)). Rather than using ad-hoc `router.replace` calls spread across screens, `useRouteByUserType` encapsulates user-role routing rules:
+Post-authentication and initial session routing is orchestrated by the `useRouteByUserType` custom hook ([useRouteByUserType.ts](file:///c:/Users/Fahad/Documents/KaamKarwao/src/hooks/useRouteByUserType.ts)). Rather than using ad-hoc routing logic spread across components, `useRouteByUserType` encapsulates role-based navigation:
 
-```typescript
-// Routing Decision Tree
-if (!user.displayName)               => router.replace('/(protected)/profile-setup')
-else if (user.usertype_id === 1)    => router.replace('/(protected)/(admin)/dashboard')  // Admin
-else if (user.usertype_id === 3)    => router.replace('/(protected)/(pro)/live-jobs')    // Professional
-else                                 => router.replace('/(protected)/(client)/home')      // Customer (2)
-```
+- **Incomplete Profiles**: Redirects users with incomplete profile details to `/(protected)/profile-setup`.
+- **Administrators**: Redirects authorized admin users to `/(protected)/(admin)/dashboard`.
+- **Professionals**: Redirects authorized service providers to `/(protected)/(pro)/live-jobs`.
+- **Customers**: Redirects standard users to `/(protected)/(client)/home`.
 
 **Entry Point Integration:**
 - **App Launch (`src/app/index.tsx`)** — Automatically evaluates logged-in sessions on mount or when pressing "Get Started".
-- **Sign-In Screen (`src/app/(auth)/sign-in.tsx`)** — Executes after phone/password authentication and session synchronization.
-- **Profile Setup (`src/hooks/useProfileSubmit.ts`)** — Executes immediately after new user profile creation and location chain resolution.
+- **Sign-In Screen (`src/app/(auth)/sign-in.tsx`)** — Executes after authentication and session synchronization.
+- **Profile Setup (`src/hooks/useProfileSubmit.ts`)** — Executes immediately after user profile registration and location setup.
 
 **Route Guards:**
-- `(protected)/_layout.tsx` — Redirects unauthenticated users (`!user`) to `/` and incomplete profiles (`!user.displayName`) to `/profile-setup`
-- `(pro)/_layout.tsx` — Verifies `usertype_id === USER_TYPE_PRO (3)`, redirecting non-professionals to client home
-- `(admin)/_layout.tsx` — Verifies `usertype_id === USER_TYPE_ADMIN (1)`, redirecting non-admins to client home
+- `(protected)/_layout.tsx` — Redirects unauthenticated users to `/` and incomplete profiles to `/profile-setup`
+- `(pro)/_layout.tsx` — Enforces professional role authorization, redirecting unauthorized users to customer home
+- `(admin)/_layout.tsx` — Enforces administrator role authorization, redirecting unauthorized users to customer home
 
 ---
 
@@ -594,11 +400,11 @@ The customer home view incorporates a custom-engineered map and location managem
 
 ## 👥 Platform Roles
 
-| Role | ID | Default Route | Key Capabilities |
-|---|---|---|---|
-| **Admin** | 1 | `/(admin)/dashboard` | Full platform oversight, user management, master data CRUD |
-| **Customer** | 2 | `/(client)/home` | Post tasks, compare bids, manage wallet, chat with pros |
-| **Professional** | 3 | `/(pro)/live-jobs` | Receive jobs via WebSocket, place bids, track earnings |
+| Role | Default Route | Key Capabilities |
+|---|---|---|
+| **Admin** | `/(admin)/dashboard` | Full platform oversight, user management, master data CRUD |
+| **Customer** | `/(client)/home` | Post tasks, compare bids, manage wallet, chat with pros |
+| **Professional** | `/(pro)/live-jobs` | Receive jobs via WebSocket, place bids, track earnings |
 
 ---
 

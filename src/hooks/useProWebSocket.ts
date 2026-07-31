@@ -116,7 +116,7 @@ function closeGlobalSocket() {
             if (wsToClose.readyState === WebSocket.OPEN || wsToClose.readyState === WebSocket.CONNECTING) {
                 wsToClose.close(1000, 'Intentional close');
             }
-        } catch (e) {}
+        } catch (e) { }
         logger.warn('[useProWebSocket] Global LiveJobs WebSocket closed.');
     }
 }
